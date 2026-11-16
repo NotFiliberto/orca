@@ -46,10 +46,10 @@ export type RemoteDropdownCopy = {
   publishBranchFirstToSync: string
   useForcePushToSync: string
   branchUpToDate: string
-  rebaseFromNamedBase: (baseRef: string) => string
+  rebaseOntoNamedBase: (baseRef: string) => string
   rebaseFromBase: string
   rebaseChooseRemoteBase: string
-  rebaseDirtyHint: string
+  rebaseCommitOrStashFirst: string
   rebaseWithLatestFrom: (baseRef: string) => string
   fetch: string
   fetchTitle: string
@@ -70,7 +70,6 @@ export type RemoteDropdownCopy = {
   statusNoBranch: string
   statusMayFail: string
   statusPublished: string
-  statusStashFirst: string
   statusReplaces: (behind: number) => string
 }
 
@@ -112,10 +111,10 @@ export const ENGLISH_REMOTE_DROPDOWN_COPY: RemoteDropdownCopy = {
   publishBranchFirstToSync: 'Publish the branch first to sync commits',
   useForcePushToSync: 'Use Force Push — remote only has older copies of local commits',
   branchUpToDate: 'Branch is up to date',
-  rebaseFromNamedBase: (baseRef) => `Rebase from ${baseRef}`,
+  rebaseOntoNamedBase: (baseRef) => `Rebase onto ${baseRef}`,
   rebaseFromBase: 'Rebase from Base',
   rebaseChooseRemoteBase: 'Choose a remote base branch to rebase from',
-  rebaseDirtyHint: 'Try rebasing; git may require committing or stashing local changes first',
+  rebaseCommitOrStashFirst: 'Commit or stash changes first',
   rebaseWithLatestFrom: (baseRef) => `Rebase current branch with latest commits from ${baseRef}`,
   fetch: 'Fetch',
   fetchTitle: 'Fetch from remote without merging',
@@ -136,6 +135,5 @@ export const ENGLISH_REMOTE_DROPDOWN_COPY: RemoteDropdownCopy = {
   statusNoBranch: 'No branch',
   statusMayFail: 'May fail',
   statusPublished: 'Published',
-  statusStashFirst: 'Stash first',
   statusReplaces: (behind) => `Replaces ↓${behind}`
 }

@@ -7,6 +7,7 @@ import { handleSourceControlCommitShortcut } from '../commit/commit-shortcut'
 import type { SourceControlFileListing } from '../listing/use-file-listing'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlConflictAbort } from '../sync/use-conflict-abort'
+import type { SourceControlRebaseContinue } from '../sync/use-rebase-continue'
 import type { SourceControlRemoteActionRunner } from '../sync/use-remote-action-runner'
 import type { SourceControlActionModel } from './use-action-model'
 import type { SourceControlHostedReviewCreation } from './use-hosted-review-creation'
@@ -17,7 +18,9 @@ export function useSourceControlActionDispatch({
   handleAbortMerge,
   handleAbortRebase,
   handleCommit,
+  handleContinueRebase,
   handleCreatePullRequest,
+  handleSkipRebaseCommit,
   handleStageAllPrimary,
   isCreatePrIntentInFlight,
   isCreatingPr,
@@ -32,6 +35,8 @@ export function useSourceControlActionDispatch({
   createPrHeaderAction: SourceControlActionModel['createPrHeaderAction']
   handleAbortMerge: SourceControlConflictAbort['handleAbortMerge']
   handleAbortRebase: SourceControlConflictAbort['handleAbortRebase']
+  handleContinueRebase: SourceControlRebaseContinue['handleContinueRebase']
+  handleSkipRebaseCommit: SourceControlRebaseContinue['handleSkipRebaseCommit']
   handleCommit: SourceControlCommitAction['handleCommit']
   handleCreatePullRequest: SourceControlHostedReviewCreation['handleCreatePullRequest']
   handleStageAllPrimary: SourceControlFileListing['handleStageAllPrimary']
@@ -66,6 +71,12 @@ export function useSourceControlActionDispatch({
         case 'abort_rebase':
           void handleAbortRebase()
           return
+        case 'continue_rebase':
+          void handleContinueRebase()
+          return
+        case 'skip_rebase_commit':
+          void handleSkipRebaseCommit()
+          return
         case 'create_pr':
           void handleCreatePullRequest()
           return
@@ -88,6 +99,8 @@ export function useSourceControlActionDispatch({
       handleCreatePullRequest,
       handleAbortMerge,
       handleAbortRebase,
+      handleContinueRebase,
+      handleSkipRebaseCommit,
       isCreatingPr,
       isCreatePrIntentInFlight,
       prGenerating,

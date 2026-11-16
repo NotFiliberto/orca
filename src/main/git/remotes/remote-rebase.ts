@@ -14,13 +14,15 @@ import {
 import { withLocalGitCapabilityCacheForExecution } from '../command-runner/host-routing/git-capability-state'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../source-control/git-read-cache-invalidation'
+import { AUTOSTASH_REAPPLY_CONFLICT } from '../source-control/mutations/git-conflict-operation'
+import type { RebaseFromBaseResult } from '../../../shared/git/status/git-status-types'
 
 export async function gitPullRebaseFromBase(
   worktreePath: string,
   baseRef: string,
   options: GitRuntimeOptions = {}
-): Promise<void> {
-  await runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
+): Promise<RebaseFromBaseResult> {
+  return runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
     gitPullRebaseFromBaseUnlocked(worktreePath, baseRef, options)
   )
 }
@@ -29,8 +31,8 @@ async function gitPullRebaseFromBaseUnlocked(
   worktreePath: string,
   baseRef: string,
   options: GitRuntimeOptions
-): Promise<void> {
-  await runWithGitReadCacheInvalidation(async () => {
+): Promise<RebaseFromBaseResult> {
+  return runWithGitReadCacheInvalidation(async () => {
     const operationOptions = {
       ...gitOptionsForWorktree(worktreePath, options),
       terminationBarrier: true
@@ -82,7 +84,7 @@ async function gitPullRebaseFromBaseUnlocked(
             isNoWriteFetchHeadUnsupportedError
           )
       )
-      await gitExecFileAsync(
+      const { stdout, stderr } = await gitExecFileAsync(
         hasHead
           ? forkPoint
             ? ['rebase', '--onto', rebaseRef, forkPoint]
@@ -90,6 +92,11 @@ async function gitPullRebaseFromBaseUnlocked(
           : ['merge', '--ff-only', rebaseRef],
         operationOptions
       )
+      // rebase.autoStash can land the rebase yet leave the reapplied edits conflicted.
+      return {
+        autostashConflict: AUTOSTASH_REAPPLY_CONFLICT.test(`${stdout}
+${stderr}`)
+      }
     } catch (error) {
       throw new Error(normalizeGitErrorMessage(error, 'pull'), { cause: error })
     } finally {

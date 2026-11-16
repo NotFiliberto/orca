@@ -1,12 +1,22 @@
 // Keep row types independent so consumers do not import the full resolver state machine.
 
-import type { SourceControlPrimaryActionDecisionInputs } from '../decisions/source-control-primary-action-decision-types'
+import type {
+  SourceControlPrimaryActionDecisionInputs,
+  SourceControlPrimaryActionKind
+} from '../decisions/source-control-primary-action-decision-types'
 import type { GitConflictOperation } from '../../git/status/git-status-types'
 
 export type DropdownActionInputs = SourceControlPrimaryActionDecisionInputs & {
   conflictOperation?: GitConflictOperation
   isPullRequestOperationActive?: boolean
   rebaseBaseRef?: string | null
+  // Commits behind rebaseBaseRef; null when the compare row measures a different ref.
+  rebaseBehindCount?: number | null
+  // Tracked changes without rebase.autoStash: Git would refuse the rebase.
+  rebaseBlockedByDirtyTree?: boolean
+  // The paused rebase's last Continue found nothing to commit; Skip replaces Continue.
+  rebaseEmptyStop?: boolean
+  primaryActionKind?: SourceControlPrimaryActionKind
 }
 
 export type DropdownActionKind =
@@ -15,6 +25,8 @@ export type DropdownActionKind =
   | 'commit_sync'
   | 'abort_merge'
   | 'abort_rebase'
+  | 'continue_rebase'
+  | 'skip_rebase_commit'
   | 'create_pr'
   | 'push_create_pr'
   | 'push'

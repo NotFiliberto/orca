@@ -14,6 +14,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
+import type { ContinueRebaseExpectedStop } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from '../sync/action-error'
 import type { CreatePrIntentNotice } from '../commit/commit-area-types'
 import {
@@ -22,6 +23,17 @@ import {
   type CreatePrIntentRunToken
 } from '../review/create-pr-intent-flow'
 
+// `unsupported`: an older host without the probe, which callers treat as off.
+export type RebaseAutoStashSetting = boolean | 'unsupported' | null
+
+/** Bound to the branch and upstream Orca rebased; any mismatch retires it. */
+// paused: Orca's rebase stopped; done: it finished; active: the diverged result has been seen.
+export type OrcaRebaseMarker = {
+  branch: string
+  upstream: string | null
+  state: 'paused' | 'done' | 'active'
+}
+
 /** Everything Source Control tracks for one worktree copy; lives past panel/section unmounts. */
 export type WorktreeOperationRecord = {
   readonly draftKey: string
@@ -29,6 +41,14 @@ export type WorktreeOperationRecord = {
   commitError: string | null
   isCommitting: boolean
   isAbortingOperation: boolean
+  // Also holds isAbortingOperation so every conflict-operation gate covers Continue.
+  isContinuingRebase: boolean
+  // null until probed; Git refuses a rebase over tracked changes unless this is on.
+  rebaseAutoStash: RebaseAutoStashSetting
+  // HEAD where Continue found nothing to commit; only that stop offers Skip.
+  rebaseEmptyStop: ContinueRebaseExpectedStop | null
+  // Orca started this rebase; once done it hides Pull/Sync/Fast-forward, never enables a force path.
+  orcaRebase: OrcaRebaseMarker | null
   remoteActionError: SourceControlActionError | null
   remoteActionSequence: number
   generateInFlight: boolean
@@ -70,6 +90,10 @@ function createRecord(draftKey: string): WorktreeOperationRecord {
     commitError: null,
     isCommitting: false,
     isAbortingOperation: false,
+    isContinuingRebase: false,
+    rebaseAutoStash: null,
+    rebaseEmptyStop: null,
+    orcaRebase: null,
     remoteActionError: null,
     remoteActionSequence: 0,
     generateInFlight: false,

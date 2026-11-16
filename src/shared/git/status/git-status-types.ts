@@ -12,6 +12,35 @@ export type GitConflictKind =
 export type GitConflictResolutionStatus = 'unresolved' | 'resolved_locally'
 export type GitConflictStatusSource = 'git' | 'session'
 export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'unknown'
+/** autostashConflict: the rebase landed but Git kept the reapplied local edits in the stash. */
+export type RebaseFromBaseResult = { autostashConflict?: boolean }
+export type ContinueRebaseAction = 'continue' | 'skip'
+/**
+ * `conflicted`: stopped on a later commit's conflict. `empty`: the resolution left nothing to
+ * commit, so only Skip or Abort can proceed. `stopped`: Git paused for another reason (e.g. an
+ * interactive edit). `message` keeps Git's own output for diagnostics.
+ */
+export type ContinueRebaseOutcome =
+  | 'completed'
+  | 'completed_autostash_conflict'
+  | 'conflicted'
+  | 'empty'
+  | 'stopped'
+  | 'failed'
+  | 'not_rebasing'
+  // Skip refused before running: the tree has edits it would discard, or the stop moved on.
+  | 'skip_refused_dirty'
+  | 'skip_refused_stale'
+/** The stop a Skip was offered for; Skip refuses unless the rebase is still exactly there. */
+export type ContinueRebaseExpectedStop = { head: string | null; step: string | null }
+export type ContinueRebaseResult = {
+  outcome: ContinueRebaseOutcome
+  message?: string
+  head?: string | null
+  step?: string | null
+  // Branch the rebase updates, from rebase-*/head-name; null when detached.
+  branch?: string | null
+}
 export type GitSubmoduleStatus = {
   commitChanged: boolean
   trackedChanges: boolean

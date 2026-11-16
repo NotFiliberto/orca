@@ -3,6 +3,7 @@ import type { SourceControlPanelFoundation } from '../panel/use-panel-foundation
 import { useSourceControlCreatePrIntentCommitMessage } from '../review/use-create-pr-intent-commit-message'
 import { useSourceControlConflictAbort } from '../sync/use-conflict-abort'
 import { useSourceControlRemoteActionRunner } from '../sync/use-remote-action-runner'
+import { useSourceControlRebaseContinue } from '../sync/use-rebase-continue'
 import { useSourceControlCommitAction } from './use-commit-action'
 import { useSourceControlCommitMessageGeneration } from './use-commit-message-generation'
 
@@ -118,6 +119,16 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     refreshGitHistoryRef,
     worktreePath
   })
+  const rebaseContinue = useSourceControlRebaseContinue({
+    activeRepoTarget,
+    activeWorktreeId,
+    conflictOperation,
+    operationStore,
+    refreshActiveGitStatusAfterMutation,
+    refreshBranchCompareRef,
+    refreshGitHistoryRef,
+    worktreePath
+  })
 
   return {
     handleCommit,
@@ -125,7 +136,8 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     ...commitMessageGeneration,
     ...createPrIntentCommitMessage,
     ...remoteActionRunner,
-    ...conflictAbort
+    ...conflictAbort,
+    ...rebaseContinue
   }
 }
 

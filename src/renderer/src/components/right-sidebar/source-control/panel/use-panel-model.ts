@@ -10,6 +10,9 @@ import { useSourceControlActionModel } from '../review/use-action-model'
 import { useSourceControlCreatePrIntentFlows } from '../review/use-create-pr-intent-flows'
 import { useSourceControlReviewFlows } from '../review/use-review-flows'
 import { useSourceControlUpstreamStatusFetch } from '../sync/use-upstream-status-fetch'
+import { useRebaseAutoStashProbe } from '../sync/use-rebase-auto-stash-probe'
+import { useOrcaRebaseMarker } from '../sync/use-orca-rebase-marker'
+import { resolveSourceControlRebaseModel } from './base-rebase-state'
 import { useSourceControlPanelFoundation } from './use-panel-foundation'
 
 export function useSourceControlPanelModel() {
@@ -31,6 +34,7 @@ export function useSourceControlPanelModel() {
     canUseHostedReviewPushTarget,
     clearSelection,
     commitMessage,
+    compareBaseRef,
     conflictOperation,
     effectiveBaseRef,
     entries,
@@ -59,6 +63,9 @@ export function useSourceControlPanelModel() {
     openCommittedDiff,
     refreshActiveGitStatusAfterMutation,
     remoteStatus,
+    rebaseEmptyStop,
+    activeGitStatusHead,
+    rebaseAutoStash,
     remoteStatusForActions,
     resolveSplitTargetGroupId,
     setIsExecutingBulk,
@@ -67,15 +74,42 @@ export function useSourceControlPanelModel() {
     unresolvedConflicts,
     worktreePath
   } = foundation
+  const suppressPullAfterRebase = useOrcaRebaseMarker({
+    branchName,
+    operationStore: foundation.operationStore,
+    orcaRebase: foundation.orcaRebase,
+    remoteStatus
+  })
   const {
     handleAbortMerge,
     handleAbortRebase,
     handleCommit,
+    handleContinueRebase,
+    handleSkipRebaseCommit,
     runCompoundCommitAction,
     runRemoteAction
   } = commitFlows
   const { handleCreatePullRequest, prGenerating } = reviewFlows
 
+  const rebaseModel = resolveSourceControlRebaseModel({
+    summary: branchSummary,
+    compareBaseRef,
+    effectiveBaseRef,
+    conflictOperation,
+    unresolvedConflictCount: unresolvedConflicts.length,
+    hasTrackedChanges: grouped.staged.length > 0 || grouped.unstaged.length > 0,
+    hasStagedChanges: grouped.staged.length > 0,
+    rebaseAutoStash,
+    rebaseEmptyStop,
+    statusHead: activeGitStatusHead,
+    isBusy:
+      isCommitting ||
+      isRemoteOperationActive ||
+      isAbortingOperation ||
+      prGenerating ||
+      isCreatingPr ||
+      isCreatePrIntentInFlight
+  })
   const actionModel = useSourceControlActionModel({
     grouped,
     commitMessage,
@@ -102,7 +136,9 @@ export function useSourceControlPanelModel() {
     hostedReviewReviewLabel: hostedReviewCreateCopy.reviewLabel,
     hasSuppressedGitHubPRState: suppressedGitHubPRState !== null,
     conflictOperation,
-    effectiveBaseRef
+    effectiveBaseRef,
+    rebaseMenu: rebaseModel,
+    suppressPullAfterRebase
   })
   const handleRelinkSuppressedGitHubPR = useCallback(() => {
     if (!activeWorktree || !activeWorktreeId || suppressedGitHubPRState?.status !== 'matched') {
@@ -120,7 +156,9 @@ export function useSourceControlPanelModel() {
     handleAbortMerge,
     handleAbortRebase,
     handleCommit,
+    handleContinueRebase,
     handleCreatePullRequest,
+    handleSkipRebaseCommit,
     handleStageAllPrimary,
     isCreatePrIntentInFlight,
     isCreatingPr,
@@ -131,6 +169,13 @@ export function useSourceControlPanelModel() {
     runCompoundCommitAction,
     runCreatePrIntent: createPrIntentFlows.runCreatePrIntent,
     runRemoteAction
+  })
+  useRebaseAutoStashProbe({
+    activeRepoTarget,
+    activeWorktreeId,
+    operationStore: foundation.operationStore,
+    shouldProbe: rebaseModel.shouldProbeRebaseAutoStash,
+    worktreePath
   })
   useSourceControlUpstreamStatusFetch({
     activeRepoTarget,
@@ -182,6 +227,7 @@ export function useSourceControlPanelModel() {
     ...reviewFlows,
     ...createPrIntentFlows,
     ...actionModel,
+    baseRebaseState: rebaseModel.baseRebaseState,
     ...actionDispatch,
     ...gitHistoryCommitActions,
     ...noteOpening,
