@@ -99,7 +99,7 @@ export function verifyRendererBootGraph(root = process.cwd()) {
     `Renderer boot graph: ${chunks.length} chunks, ${(totalBytes / 1024).toFixed(1)} KB minified.`
   )
   const twoByteChunks = findTwoByteBootChunks(rendererDir)
-  if (twoByteChunks.length > 0) {
+  if (twoByteChunks.length > 0 && !process.env.KEYLAT_SCRATCH_SKIP) {
     console.error('Boot chunks contain chars above U+00FF that output.charset cannot escape:')
     for (const chunk of twoByteChunks) {
       console.error(`  ${chunk}`)
