@@ -204,6 +204,13 @@ describe('useImeEnterGestureOwnership', () => {
       swallowed: true
     },
     {
+      name: 'swallows the Enter that confirms tone-marked Pinyin',
+      commitKey: { key: 'Enter', keyCode: 229, code: 'Enter' },
+      committed: 'mǎ',
+      frameRuns: false,
+      swallowed: true
+    },
+    {
       name: 'swallows the IBus confirm Enter that follows compositionend',
       commitKey: null,
       committed: '日本語',

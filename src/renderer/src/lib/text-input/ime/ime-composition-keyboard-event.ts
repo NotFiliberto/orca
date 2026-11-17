@@ -35,6 +35,8 @@ const LATIN_ONLY = /^[\p{Script=Latin}\p{M}]+$/u
 const NON_ASCII = /[^\p{ASCII}]/u
 // CJK IMEs confirm full-width letters (ａｂｃ) through a candidate step.
 const FULL_WIDTH_FORMS = /[\uFF00-\uFFEF]/u
+// Macron, caron and diaeresis mark Pinyin tones (mǎ, lǜ); Vietnamese never uses them.
+const PINYIN_ONLY_MARKS = /[\u0304\u030C\u0308]/u
 
 /** Hangul, and Vietnamese Telex/VNI (Latin with diacritics), have no candidate step either. Plain
  * ASCII stays a confirm: Pinyin's Enter commits the typed letters instead of sending. */
@@ -43,7 +45,8 @@ function commitsWithOwnEnter(committedText: string): boolean {
     HANGUL_ONLY.test(committedText) ||
     (LATIN_ONLY.test(committedText) &&
       NON_ASCII.test(committedText) &&
-      !FULL_WIDTH_FORMS.test(committedText))
+      !FULL_WIDTH_FORMS.test(committedText) &&
+      !PINYIN_ONLY_MARKS.test(committedText.normalize('NFD')))
   )
 }
 
