@@ -13,7 +13,32 @@ import type { AbortConflictOperation } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
+import { confirmRebaseAbort } from './rebase-abort-confirmation'
+import { continueRuntimeGitRebase } from '@/runtime/source-control/git/runtime-git-rebase-client'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
+
+// Unknown (older host, unreachable) keeps the plain confirm rather than blocking Abort.
+async function readRebaseAbortDiscards(
+  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget'],
+  worktreeId: string,
+  worktreePath: string,
+  scope: ReturnType<typeof useSourceControlScope>
+): Promise<string[] | null> {
+  try {
+    const result = await continueRuntimeGitRebase(
+      {
+        target: requireGitOwnerTarget(activeRepoTarget),
+        worktreeId,
+        worktreePath,
+        connectionId: sourceControlConnectionId(scope, worktreeId)
+      },
+      'inspect'
+    )
+    return result.abortWouldDiscard ?? null
+  } catch {
+    return null
+  }
+}
 
 export function useSourceControlConflictAbort({
   activeRepoTarget,
@@ -49,32 +74,27 @@ export function useSourceControlConflictAbort({
       }
 
       const isRebase = requestedOperation === 'rebase'
-      const title = isRebase
-        ? translate(
-            'auto.components.right.sidebar.SourceControl.abortRebaseConfirmTitle',
-            'Abort rebase?'
-          )
-        : translate(
-            'auto.components.right.sidebar.SourceControl.abortMergeConfirmTitle',
-            'Abort merge?'
-          )
-      const description = isRebase
-        ? translate(
-            'auto.components.right.sidebar.SourceControl.abortRebaseConfirmDescription',
-            'This cancels the rebase in progress and can discard conflict resolutions made during this rebase.'
-          )
-        : translate(
-            'auto.components.right.sidebar.SourceControl.abortMergeConfirmDescription',
-            'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
-          )
-      const confirmed = await confirmAction({
-        title,
-        description,
-        confirmLabel: isRebase
-          ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-          : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge'),
-        confirmVariant: 'destructive'
-      })
+      const confirmed = isRebase
+        ? await confirmRebaseAbort({
+            readDiscards: () =>
+              readRebaseAbortDiscards(activeRepoTarget, activeWorktreeId, worktreePath, scope),
+            confirm: confirmAction
+          })
+        : await confirmAction({
+            title: translate(
+              'auto.components.right.sidebar.SourceControl.abortMergeConfirmTitle',
+              'Abort merge?'
+            ),
+            description: translate(
+              'auto.components.right.sidebar.SourceControl.abortMergeConfirmDescription',
+              'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+            ),
+            confirmLabel: translate(
+              'auto.components.right.sidebar.SourceControl.540ca8f78c',
+              'Abort merge'
+            ),
+            confirmVariant: 'destructive'
+          })
       if (!confirmed || operationStore.getState().isAbortingOperation) {
         return
       }

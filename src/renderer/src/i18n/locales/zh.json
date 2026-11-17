@@ -14131,7 +14131,10 @@
             "continueRebaseUnconfirmed": "无法确认结果。源代码管理已刷新以显示当前状态。",
             "noRebaseInProgress": "没有正在进行的变基",
             "rebaseStopMovedOn": "变基已经继续进行。请查看面板后重试。",
-            "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。"
+            "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。",
+            "abortRebaseDiscardTitle_other": "中止变基并丢弃对 {{count}} 个文件的修改？",
+            "abortRebaseDiscardFilesMore": "{{files}} 等另外 {{count}} 个",
+            "abortRebaseDiscardConfirm": "丢弃并中止"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",

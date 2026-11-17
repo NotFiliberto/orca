@@ -116,6 +116,23 @@ describe('continueRebase against real git', () => {
     expect(git('diff', '--name-only', '--cached')).toBe('a.txt\n')
   })
 
+  it('names the tracked edits an Abort would discard, but not the pick being resolved', async () => {
+    const { repoPath, git, write } = createFeatureBehindConflictingMain()
+    expect(() => git('rebase', 'main')).toThrow()
+    write('a.txt', 'resolved a\n')
+    git('add', 'a.txt')
+    await expect(continueRebase(repoPath, 'inspect')).resolves.toMatchObject({
+      abortWouldDiscard: []
+    })
+
+    write('c.txt', 'edited during the pause\n')
+    await expect(continueRebase(repoPath, 'inspect')).resolves.toMatchObject({
+      abortWouldDiscard: ['c.txt']
+    })
+    // Inspecting never touches the tree: the edit is still there for the user to keep.
+    expect(git('diff', '--name-only')).toContain('c.txt')
+  })
+
   it('keeps the rebase paused and reports git’s refusal for an unstaged resolution', async () => {
     const { repoPath, git, write } = createFeatureBehindConflictingMain()
     expect(() => git('rebase', 'main')).toThrow()

@@ -10325,7 +10325,12 @@
             "continueRebaseUnconfirmed": "Não foi possível confirmar o resultado. O controle de código foi atualizado para mostrar o estado atual.",
             "noRebaseInProgress": "Nenhum rebase em andamento",
             "rebaseStopMovedOn": "O rebase já avançou. Verifique o painel e tente novamente.",
-            "rebaseEmptyStep": "Nada para fazer commit nesta etapa. Aborte o rebase ou conclua-o em um terminal."
+            "rebaseEmptyStep": "Nada para fazer commit nesta etapa. Aborte o rebase ou conclua-o em um terminal.",
+            "abortRebaseDiscardTitle_one": "Abortar o rebase e descartar as edições em {{count}} arquivo?",
+            "abortRebaseDiscardTitle_many": "Abortar o rebase e descartar as edições em {{count}} arquivos?",
+            "abortRebaseDiscardTitle_other": "Abortar o rebase e descartar as edições em {{count}} arquivos?",
+            "abortRebaseDiscardFilesMore": "{{files}} e mais {{count}}",
+            "abortRebaseDiscardConfirm": "Descartar e abortar"
           },
           "checks": {
             "panel": {

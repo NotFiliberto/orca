@@ -51,6 +51,8 @@ export type ContinueRebaseResult = {
   branch?: string | null
   // Set when this Continue finished a rebase Orca started over an integrated upstream tip.
   integratedUpstreamOid?: string
+  // inspect only: tracked files Abort would discard that the stopped pick does not touch.
+  abortWouldDiscard?: string[]
 }
 export type GitSubmoduleStatus = {
   commitChanged: boolean

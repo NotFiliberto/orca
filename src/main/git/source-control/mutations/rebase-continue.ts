@@ -50,8 +50,44 @@ async function inspectRebaseStop(
   return {
     outcome: 'inspected',
     stop: await readRebaseStopToken(worktreePath, options),
-    branch: await readRebasingBranch(worktreePath, options)
+    branch: await readRebasingBranch(worktreePath, options),
+    abortWouldDiscard: await readEditsAbortWouldDiscard(worktreePath, options)
   }
+}
+
+/**
+ * Tracked edits that git rebase --abort would throw away beyond resolving the stopped pick: any
+ * changed path the pick itself does not touch. Without REBASE_HEAD every changed path counts.
+ */
+async function readEditsAbortWouldDiscard(
+  worktreePath: string,
+  options: GitRuntimeOptions
+): Promise<string[]> {
+  const run = (args: string[]) =>
+    gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+  const lines = (stdout: string) =>
+    stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+  const changed = lines((await run(['diff', '--name-only', '--no-renames', 'HEAD', '--'])).stdout)
+  let pickPaths = new Set<string>()
+  try {
+    const { stdout } = await run([
+      'diff-tree',
+      '--no-commit-id',
+      '--name-only',
+      '--no-renames',
+      '-r',
+      '--root',
+      'REBASE_HEAD',
+      '--'
+    ])
+    pickPaths = new Set(lines(stdout))
+  } catch {
+    // No stopped pick to attribute edits to: every changed path is at risk.
+  }
+  return changed.filter((filePath) => !pickPaths.has(filePath)).sort()
 }
 
 async function continueRebaseUnlocked(
