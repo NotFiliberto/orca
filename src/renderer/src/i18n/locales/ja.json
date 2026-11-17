@@ -14081,7 +14081,8 @@
             "rebaseEmptyStep": "このステップにはコミットする内容がありません。リベースを中止するか、ターミナルで完了してください。",
             "abortRebaseDiscardTitle_other": "リベースを中止して {{count}} 個のファイルの編集を破棄しますか？",
             "abortRebaseDiscardFilesMore": "{{files}} ほか {{count}} 件",
-            "abortRebaseDiscardConfirm": "破棄して中止"
+            "abortRebaseDiscardConfirm": "破棄して中止",
+            "abortRebaseMayLoseEdits": "コミットされていない編集が失われる可能性があります。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",

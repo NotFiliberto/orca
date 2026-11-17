@@ -20,6 +20,7 @@ import {
 } from '../source-control/mutations/git-conflict-operation'
 import { recordOrcaRebaseProvenance } from '../source-control/mutations/orca-rebase-provenance'
 import {
+  readRebaseRunFiles,
   readRebaseStopToken,
   readRebasingBranch
 } from '../source-control/mutations/rebase-continue'
@@ -47,6 +48,8 @@ async function gitPullRebaseFromBaseUnlocked(
     }
     let rebaseRef: string | null = null
     let integratedUpstreamOid: string | null = null
+    // What this run will write as onto/orig-head, so a paused rebase can be proven to be ours.
+    let ownRun: { onto: string; origHead: string } | null = null
     try {
       const source = await resolveGitRemoteRebaseSource(
         (args) => gitExecFileAsync(args, operationOptions),
@@ -95,6 +98,7 @@ async function gitPullRebaseFromBaseUnlocked(
       )
       // Pull hiding is only safe when the upstream tip is already in the branch being rebased.
       integratedUpstreamOid = hasHead ? await readIntegratedUpstreamOid(operationOptions) : null
+      ownRun = integratedUpstreamOid ? await readOwnRunIdentity(rebaseRef, operationOptions) : null
       const { stdout, stderr } = await gitExecFileAsync(
         hasHead
           ? forkPoint
@@ -109,8 +113,8 @@ async function gitPullRebaseFromBaseUnlocked(
         ...(integratedUpstreamOid ? { integratedUpstreamOid } : {})
       }
     } catch (error) {
-      if (integratedUpstreamOid) {
-        await rememberPausedOrcaRebase(worktreePath, integratedUpstreamOid, options)
+      if (integratedUpstreamOid && ownRun) {
+        await rememberPausedOrcaRebase(worktreePath, integratedUpstreamOid, ownRun, options)
       }
       throw new Error(normalizeGitErrorMessage(error, 'pull'), { cause: error })
     } finally {
@@ -127,6 +131,23 @@ async function gitPullRebaseFromBaseUnlocked(
       }
     }
   })
+}
+
+async function readOwnRunIdentity(
+  rebaseRef: string,
+  options: Parameters<typeof gitExecFileAsync>[1]
+): Promise<{ onto: string; origHead: string } | null> {
+  try {
+    const onto = (
+      await gitExecFileAsync(['rev-parse', '--verify', rebaseRef], options)
+    ).stdout.trim()
+    const origHead = (
+      await gitExecFileAsync(['rev-parse', '--verify', 'HEAD'], options)
+    ).stdout.trim()
+    return onto && origHead ? { onto, origHead } : null
+  } catch {
+    return null
+  }
 }
 
 /** The upstream tip, only when it is an ancestor of HEAD (no unintegrated collaborator commits). */
@@ -153,11 +174,17 @@ async function readIntegratedUpstreamOid(
 async function rememberPausedOrcaRebase(
   worktreePath: string,
   integratedUpstreamOid: string,
+  ownRun: { onto: string; origHead: string },
   options: GitRuntimeOptions
 ): Promise<void> {
   try {
     const { signal: _abortedSignal, ...readOptions } = options
     if ((await detectConflictOperation(worktreePath, readOptions)) !== 'rebase') {
+      return
+    }
+    // Another Git may have replaced our paused run; only a run with our onto and orig-head is ours.
+    const run = await readRebaseRunFiles(worktreePath, readOptions)
+    if (run.onto !== ownRun.onto || run.origHead !== ownRun.origHead) {
       return
     }
     const branch = await readRebasingBranch(worktreePath, readOptions)

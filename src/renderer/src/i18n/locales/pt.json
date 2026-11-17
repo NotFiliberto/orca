@@ -10330,7 +10330,8 @@
             "abortRebaseDiscardTitle_many": "Abortar o rebase e descartar as edições em {{count}} arquivos?",
             "abortRebaseDiscardTitle_other": "Abortar o rebase e descartar as edições em {{count}} arquivos?",
             "abortRebaseDiscardFilesMore": "{{files}} e mais {{count}}",
-            "abortRebaseDiscardConfirm": "Descartar e abortar"
+            "abortRebaseDiscardConfirm": "Descartar e abortar",
+            "abortRebaseMayLoseEdits": "Edições não confirmadas podem ser perdidas."
           },
           "checks": {
             "panel": {

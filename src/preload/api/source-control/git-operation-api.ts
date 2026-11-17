@@ -30,6 +30,7 @@ export type GitOperationApi = {
     connectionId?: string
     action?: ContinueRebaseAction
     expected?: RebaseStopToken
+    expectedDiscards?: string[]
   }) => Promise<ContinueRebaseResult>
   rebaseAutoStash: (args: { worktreePath: string; connectionId?: string }) => Promise<boolean>
   fetch: (args: {

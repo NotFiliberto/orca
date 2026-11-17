@@ -123,8 +123,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     detectConflictOperation: (worktreePath) => detectConflictOperation(worktreePath, base),
     abortMerge: (worktreePath) => abortMerge(worktreePath, interactive),
     abortRebase: (worktreePath) => abortRebase(worktreePath, interactive),
-    continueRebase: (worktreePath, action, expected) =>
-      continueRebase(worktreePath, action, { ...interactive, expected }),
+    continueRebase: (worktreePath, action, expected, expectedDiscards) =>
+      continueRebase(worktreePath, action, { ...interactive, expected, expectedDiscards }),
     readRebaseAutoStash: (worktreePath) => readRebaseAutoStash(worktreePath, base),
     checkoutBranch: (worktreePath, branch, creation, detached) =>
       checkoutBranch(

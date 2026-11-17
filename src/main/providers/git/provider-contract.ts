@@ -94,7 +94,8 @@ export type IGitProvider = {
   continueRebase(
     worktreePath: string,
     action: ContinueRebaseAction,
-    expected?: RebaseStopToken
+    expected?: RebaseStopToken,
+    expectedDiscards?: string[]
   ): Promise<ContinueRebaseResult>
   readRebaseAutoStash(worktreePath: string): Promise<boolean>
   /** `skippedPaths`: files git could not replace (held open on Windows) though the switch landed. */

@@ -110,6 +110,12 @@ describe('resolveDropdownItems owner-approved differences from main', () => {
     expect(menuRows(CHANGED_STATES.orcaRebased)).toEqual(['force_push Replaces ↓2', 'fetch'])
   })
 
+  it('hides Commit & Sync after Orca rebased, even with staged changes', () => {
+    const staged = { ...CHANGED_STATES.orcaRebased, stagedCount: 3, hasMessage: true }
+    expect(menuRows(staged)).toContain('commit_push')
+    expect(menuRows(staged)).not.toContain('commit_sync')
+  })
+
   it('limits a paused rebase to Abort, Continue once resolved, and Fetch', () => {
     expect(menuRows(STATES.rebaseConflict)).toEqual(['abort_rebase', '---', 'fetch'])
     expect(menuRows(CHANGED_STATES.rebaseResolved)).toEqual([

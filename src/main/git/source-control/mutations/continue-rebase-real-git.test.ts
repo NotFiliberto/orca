@@ -116,21 +116,53 @@ describe('continueRebase against real git', () => {
     expect(git('diff', '--name-only', '--cached')).toBe('a.txt\n')
   })
 
-  it('names the tracked edits an Abort would discard, but not the pick being resolved', async () => {
+  it('lists every tracked path Abort would reset, and aborts only that confirmed set', async () => {
     const { repoPath, git, write } = createFeatureBehindConflictingMain()
     expect(() => git('rebase', 'main')).toThrow()
     write('a.txt', 'resolved a\n')
     git('add', 'a.txt')
-    await expect(continueRebase(repoPath, 'inspect')).resolves.toMatchObject({
-      abortWouldDiscard: []
-    })
-
     write('c.txt', 'edited during the pause\n')
-    await expect(continueRebase(repoPath, 'inspect')).resolves.toMatchObject({
-      abortWouldDiscard: ['c.txt']
+    const inspected = await continueRebase(repoPath, 'inspect')
+    expect(inspected.abortWouldDiscard).toEqual(['a.txt', 'c.txt'])
+
+    // A later edit is not what the user agreed to lose: nothing is aborted, the fresh set returns.
+    write('b.txt', 'another edit\n')
+    await expect(
+      continueRebase(repoPath, 'abort', {
+        expected: inspected.stop,
+        expectedDiscards: inspected.abortWouldDiscard
+      })
+    ).resolves.toMatchObject({
+      outcome: 'abort_changed',
+      abortWouldDiscard: ['a.txt', 'b.txt', 'c.txt']
     })
-    // Inspecting never touches the tree: the edit is still there for the user to keep.
+    await expect(detectConflictOperation(repoPath)).resolves.toBe('rebase')
     expect(git('diff', '--name-only')).toContain('c.txt')
+
+    await expect(
+      continueRebase(repoPath, 'abort', {
+        expected: inspected.stop,
+        expectedDiscards: ['a.txt', 'b.txt', 'c.txt']
+      })
+    ).resolves.toEqual({ outcome: 'aborted' })
+    await expect(detectConflictOperation(repoPath)).resolves.toBe('unknown')
+  })
+
+  it('treats a stop token with a missing field as stale, never equal', async () => {
+    const { repoPath, git, write } = createFeatureBehindConflictingMain()
+    expect(() => git('rebase', 'main')).toThrow()
+    write('a.txt', 'resolved a\n')
+    git('add', 'a.txt')
+    const stop = await stopToken(repoPath)
+    if (!stop) {
+      throw new Error('expected a stop')
+    }
+    for (const missing of ['head', 'step', 'incarnation'] as const) {
+      await expect(
+        continueRebase(repoPath, 'continue', { expected: { ...stop, [missing]: null } })
+      ).resolves.toMatchObject({ outcome: 'stale' })
+    }
+    await expect(detectConflictOperation(repoPath)).resolves.toBe('rebase')
   })
 
   it('keeps the rebase paused and reports git’s refusal for an unstaged resolution', async () => {

@@ -95,6 +95,7 @@ export const gitApi = {
     connectionId?: string
     action?: ContinueRebaseAction
     expected?: RebaseStopToken
+    expectedDiscards?: string[]
   }): Promise<ContinueRebaseResult> => ipcRenderer.invoke('git:continueRebase', args),
   rebaseAutoStash: (args: { worktreePath: string; connectionId?: string }): Promise<boolean> =>
     ipcRenderer.invoke('git:rebaseAutoStash', args),

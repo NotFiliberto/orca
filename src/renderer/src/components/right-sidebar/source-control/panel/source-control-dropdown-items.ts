@@ -201,7 +201,9 @@ const HIDDEN_AFTER_ORCA_REBASE = new Set<DropdownActionKind>([
   'pull',
   'sync',
   'fast_forward',
-  'push'
+  'push',
+  // Commit & Sync pulls after committing, so it would bring the old copies back too.
+  'commit_sync'
 ])
 
 /** List only actions that can run right now, minus the primary; Fetch always stays as the refresh path. */

@@ -60,10 +60,16 @@ export class RuntimeGitSyncCommands {
   async continueRuntimeGitRebase(
     worktreeSelector: string,
     action: ContinueRebaseAction = 'continue',
-    expected?: RebaseStopToken
+    expected?: RebaseStopToken,
+    expectedDiscards?: string[]
   ): Promise<ContinueRebaseResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    return requireRuntimeGitProvider(target).continueRebase(target.worktree.path, action, expected)
+    return requireRuntimeGitProvider(target).continueRebase(
+      target.worktree.path,
+      action,
+      expected,
+      expectedDiscards
+    )
   }
 
   async readRuntimeGitRebaseAutoStash(worktreeSelector: string): Promise<{ autoStash: boolean }> {

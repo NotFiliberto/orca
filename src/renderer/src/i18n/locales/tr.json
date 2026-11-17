@@ -14132,7 +14132,8 @@
             "abortRebaseDiscardTitle_one": "Rebase iptal edilsin ve {{count}} dosyadaki düzenlemeler atılsın mı?",
             "abortRebaseDiscardTitle_other": "Rebase iptal edilsin ve {{count}} dosyadaki düzenlemeler atılsın mı?",
             "abortRebaseDiscardFilesMore": "{{files}} ve {{count}} tane daha",
-            "abortRebaseDiscardConfirm": "At ve iptal et"
+            "abortRebaseDiscardConfirm": "At ve iptal et",
+            "abortRebaseMayLoseEdits": "Commit edilmemiş düzenlemeler kaybolabilir."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",

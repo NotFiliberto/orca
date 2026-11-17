@@ -13,28 +13,19 @@ import type { AbortConflictOperation } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
-import { confirmRebaseAbort } from './rebase-abort-confirmation'
+import {
+  confirmAndAbortRebase,
+  rebaseAbortEvidence,
+  type RebaseAbortEvidence
+} from './rebase-abort-confirmation'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { continueRuntimeGitRebase } from '@/runtime/source-control/git/runtime-git-rebase-client'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
 
-// Unknown (older host, unreachable) keeps the plain confirm rather than blocking Abort.
-async function readRebaseAbortDiscards(
-  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget'],
-  worktreeId: string,
-  worktreePath: string,
-  scope: ReturnType<typeof useSourceControlScope>
-): Promise<string[] | null> {
+// An older or unreachable host cannot prove what Abort resets: that evidence is unknown, never clean.
+async function inspectRebaseAbort(context: RuntimeGitContext): Promise<RebaseAbortEvidence> {
   try {
-    const result = await continueRuntimeGitRebase(
-      {
-        target: requireGitOwnerTarget(activeRepoTarget),
-        worktreeId,
-        worktreePath,
-        connectionId: sourceControlConnectionId(scope, worktreeId)
-      },
-      'inspect'
-    )
-    return result.abortWouldDiscard ?? null
+    return rebaseAbortEvidence(await continueRuntimeGitRebase(context, 'inspect'))
   } catch {
     return null
   }
@@ -74,43 +65,54 @@ export function useSourceControlConflictAbort({
       }
 
       const isRebase = requestedOperation === 'rebase'
-      const confirmed = isRebase
-        ? await confirmRebaseAbort({
-            readDiscards: () =>
-              readRebaseAbortDiscards(activeRepoTarget, activeWorktreeId, worktreePath, scope),
-            confirm: confirmAction
-          })
-        : await confirmAction({
-            title: translate(
-              'auto.components.right.sidebar.SourceControl.abortMergeConfirmTitle',
-              'Abort merge?'
-            ),
-            description: translate(
-              'auto.components.right.sidebar.SourceControl.abortMergeConfirmDescription',
-              'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
-            ),
-            confirmLabel: translate(
-              'auto.components.right.sidebar.SourceControl.540ca8f78c',
-              'Abort merge'
-            ),
-            confirmVariant: 'destructive'
-          })
-      if (!confirmed || operationStore.getState().isAbortingOperation) {
+      // Rebase asks inside its own loop, which may re-ask if the host saw new edits.
+      if (
+        !isRebase &&
+        !(await confirmAction({
+          title: translate(
+            'auto.components.right.sidebar.SourceControl.abortMergeConfirmTitle',
+            'Abort merge?'
+          ),
+          description: translate(
+            'auto.components.right.sidebar.SourceControl.abortMergeConfirmDescription',
+            'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+          ),
+          confirmLabel: translate(
+            'auto.components.right.sidebar.SourceControl.540ca8f78c',
+            'Abort merge'
+          ),
+          confirmVariant: 'destructive'
+        }))
+      ) {
+        return
+      }
+      if (operationStore.getState().isAbortingOperation) {
         return
       }
 
-      const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
-      operationStore.setState({ isAbortingOperation: true, remoteActionError: null })
+      const context = {
+        // Abort on the repo owner, which may differ from the focused host.
+        target: requireGitOwnerTarget(activeRepoTarget),
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: sourceControlConnectionId(scope, activeWorktreeId)
+      }
+      const beginAbort = (): void =>
+        operationStore.setState({ isAbortingOperation: true, remoteActionError: null })
       try {
-        const context = {
-          // Abort on the repo owner, which may differ from the focused host.
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
+        if (isRebase) {
+          await confirmAndAbortRebase({
+            inspect: () => inspectRebaseAbort(context),
+            confirm: confirmAction,
+            beginAbort,
+            abortConfirmed: (stop, discards) =>
+              continueRuntimeGitRebase(context, 'abort', stop, discards),
+            abortUnverified: () => abortRuntimeGitRebase(context)
+          })
+        } else {
+          beginAbort()
+          await abortRuntimeGitMerge(context)
         }
-        const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
-        await abortGitOperation(context)
       } catch (error) {
         const message =
           error instanceof Error

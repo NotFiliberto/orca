@@ -18,8 +18,11 @@ export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'revert'
  * (so the remote now holds just old copies); older hosts omit it.
  */
 export type RebaseFromBaseResult = { autostashConflict?: boolean; integratedUpstreamOid?: string }
-/** inspect: read the current stop only; continue: run git rebase --continue at that stop. */
-export type ContinueRebaseAction = 'continue' | 'inspect'
+/**
+ * inspect: read the current stop only; continue: run git rebase --continue at that stop; abort:
+ * run git rebase --abort only if the stop and the paths it would reset are still what was confirmed.
+ */
+export type ContinueRebaseAction = 'continue' | 'inspect' | 'abort'
 /** One stop of one rebase run (incarnation = onto + orig-head). Continue refuses any other. */
 export type RebaseStopToken = {
   head: string | null
@@ -41,6 +44,9 @@ export type ContinueRebaseOutcome =
   | 'failed'
   | 'not_rebasing'
   | 'stale'
+  | 'aborted'
+  // The stop or the set of paths Abort would reset changed since the user confirmed; nothing ran.
+  | 'abort_changed'
 export type ContinueRebaseResult = {
   outcome: ContinueRebaseOutcome
   // Git's own output, kept for diagnostics.
@@ -51,7 +57,7 @@ export type ContinueRebaseResult = {
   branch?: string | null
   // Set when this Continue finished a rebase Orca started over an integrated upstream tip.
   integratedUpstreamOid?: string
-  // inspect only: tracked files Abort would discard that the stopped pick does not touch.
+  // inspect/abort_changed: every tracked path Abort would reset; absent when Git could not say.
   abortWouldDiscard?: string[]
 }
 export type GitSubmoduleStatus = {

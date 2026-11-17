@@ -13300,7 +13300,8 @@
             "rebaseEmptyStep": "이 단계에는 커밋할 내용이 없습니다. 리베이스를 중단하거나 터미널에서 마무리하세요.",
             "abortRebaseDiscardTitle_other": "리베이스를 중단하고 파일 {{count}}개의 편집 내용을 폐기할까요?",
             "abortRebaseDiscardFilesMore": "{{files}} 외 {{count}}개",
-            "abortRebaseDiscardConfirm": "폐기하고 중단"
+            "abortRebaseDiscardConfirm": "폐기하고 중단",
+            "abortRebaseMayLoseEdits": "커밋되지 않은 편집 내용이 손실될 수 있습니다."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",

@@ -13793,7 +13793,8 @@
             "rebaseEmptyStep": "此步驟沒有可提交的內容。請中止重定基底，或在終端機中完成它。",
             "abortRebaseDiscardTitle_other": "中止重定基底並捨棄對 {{count}} 個檔案的編輯？",
             "abortRebaseDiscardFilesMore": "{{files}} 及另外 {{count}} 個",
-            "abortRebaseDiscardConfirm": "捨棄並中止"
+            "abortRebaseDiscardConfirm": "捨棄並中止",
+            "abortRebaseMayLoseEdits": "未提交的編輯可能會遺失。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",

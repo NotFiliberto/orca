@@ -14134,7 +14134,8 @@
             "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。",
             "abortRebaseDiscardTitle_other": "中止变基并丢弃对 {{count}} 个文件的修改？",
             "abortRebaseDiscardFilesMore": "{{files}} 等另外 {{count}} 个",
-            "abortRebaseDiscardConfirm": "丢弃并中止"
+            "abortRebaseDiscardConfirm": "丢弃并中止",
+            "abortRebaseMayLoseEdits": "未提交的编辑可能会丢失。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",

@@ -1,4 +1,8 @@
 import { translate } from '@/i18n/i18n'
+import type {
+  ContinueRebaseResult,
+  RebaseStopToken
+} from '../../../../../../shared/git/status/git-status-types'
 
 export type AbortConfirmRequest = {
   title: string
@@ -7,10 +11,31 @@ export type AbortConfirmRequest = {
   confirmVariant: 'destructive'
 }
 
+/** What the host proved Abort would reset; null when it could not say (older host, unreadable). */
+export type RebaseAbortEvidence = { stop: RebaseStopToken; discards: string[] } | null
+
 const LISTED_FILE_LIMIT = 3
 
-function abortRebaseDialog(files: string[] | null): AbortConfirmRequest {
-  if (!files || files.length === 0) {
+function abortRebaseDialog(discards: string[] | null): AbortConfirmRequest {
+  const discardLabel = translate(
+    'auto.components.right.sidebar.SourceControl.abortRebaseDiscardConfirm',
+    'Discard and abort'
+  )
+  if (discards === null) {
+    return {
+      title: translate(
+        'auto.components.right.sidebar.SourceControl.abortRebaseConfirmTitle',
+        'Abort rebase?'
+      ),
+      description: translate(
+        'auto.components.right.sidebar.SourceControl.abortRebaseMayLoseEdits',
+        'Uncommitted edits may be lost.'
+      ),
+      confirmLabel: discardLabel,
+      confirmVariant: 'destructive'
+    }
+  }
+  if (discards.length === 0) {
     return {
       title: translate(
         'auto.components.right.sidebar.SourceControl.abortRebaseConfirmTitle',
@@ -27,13 +52,16 @@ function abortRebaseDialog(files: string[] | null): AbortConfirmRequest {
       confirmVariant: 'destructive'
     }
   }
-  const listed = files.slice(0, LISTED_FILE_LIMIT).join(', ')
-  const hidden = files.length - LISTED_FILE_LIMIT
+  const listed = discards.slice(0, LISTED_FILE_LIMIT).join(', ')
+  const hidden = discards.length - LISTED_FILE_LIMIT
   return {
     title: translate(
       'auto.components.right.sidebar.SourceControl.abortRebaseDiscardTitle',
       'Abort rebase and discard edits to {{count}} files?',
-      { count: files.length, defaultValue_one: 'Abort rebase and discard edits to {{count}} file?' }
+      {
+        count: discards.length,
+        defaultValue_one: 'Abort rebase and discard edits to {{count}} file?'
+      }
     ),
     description:
       hidden > 0
@@ -43,40 +71,50 @@ function abortRebaseDialog(files: string[] | null): AbortConfirmRequest {
             { files: listed, count: hidden }
           )
         : listed,
-    confirmLabel: translate(
-      'auto.components.right.sidebar.SourceControl.abortRebaseDiscardConfirm',
-      'Discard and abort'
-    ),
+    confirmLabel: discardLabel,
     confirmVariant: 'destructive'
   }
 }
 
-function sameFiles(a: string[] | null, b: string[] | null): boolean {
-  return (a ?? []).join('\n') === (b ?? []).join('\n')
+export function rebaseAbortEvidence(result: ContinueRebaseResult): RebaseAbortEvidence {
+  return result.stop && result.abortWouldDiscard
+    ? { stop: result.stop, discards: result.abortWouldDiscard }
+    : null
 }
 
 /**
- * Abort resets every tracked file, so name edits outside the stopped pick before losing them, and
- * re-ask if that set changed while the dialog was open. `readDiscards` returns null when the host
- * cannot tell (older hosts), which keeps the plain confirm.
+ * Abort resets every tracked path, so the dialog names them (or says it cannot tell), and the host
+ * aborts only if the stop and that exact set are unchanged under its lock; otherwise ask again.
  */
-export async function confirmRebaseAbort({
-  readDiscards,
-  confirm
+export async function confirmAndAbortRebase({
+  inspect,
+  confirm,
+  beginAbort,
+  abortConfirmed,
+  abortUnverified
 }: {
-  readDiscards: () => Promise<string[] | null>
+  inspect: () => Promise<RebaseAbortEvidence>
   confirm: (request: AbortConfirmRequest) => Promise<boolean>
-}): Promise<boolean> {
-  let shown = await readDiscards()
+  beginAbort: () => void
+  abortConfirmed: (stop: RebaseStopToken, discards: string[]) => Promise<ContinueRebaseResult>
+  // Only after the user accepted "edits may be lost", for hosts that cannot verify.
+  abortUnverified: () => Promise<void>
+}): Promise<'aborted' | 'cancelled'> {
+  let evidence = await inspect()
   for (let attempt = 0; attempt < 3; attempt++) {
-    if (!(await confirm(abortRebaseDialog(shown)))) {
-      return false
+    if (!(await confirm(abortRebaseDialog(evidence?.discards ?? null)))) {
+      return 'cancelled'
     }
-    const current = await readDiscards()
-    if (sameFiles(current, shown)) {
-      return true
+    beginAbort()
+    if (!evidence) {
+      await abortUnverified()
+      return 'aborted'
     }
-    shown = current
+    const result = await abortConfirmed(evidence.stop, evidence.discards)
+    if (result.outcome !== 'abort_changed') {
+      return 'aborted'
+    }
+    evidence = rebaseAbortEvidence(result)
   }
-  return false
+  return 'cancelled'
 }
