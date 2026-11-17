@@ -418,14 +418,47 @@ function summarize(values) {
   return { n: values.filter(Number.isFinite).length, p50: pct(values, 50), p95: pct(values, 95), max: pct(values, 100) }
 }
 
+async function focusDiagnostics(page, outDir, label) {
+  await page.screenshot({ path: path.join(outDir, `${label}-nofocus.png`) }).catch(() => {})
+  return page.evaluate(() => {
+    const state = window.__store.getState()
+    const withTabs = Object.entries(state.tabsByWorktree ?? {}).filter(
+      ([, tabs]) => Array.isArray(tabs) && tabs.length > 0
+    )
+    return {
+      activeWorktreeId: state.activeWorktreeId,
+      activeView: state.activeView ?? null,
+      activeTabId: state.activeTabId ?? null,
+      worktreesWithTabs: withTabs.length,
+      firstWithTabs: withTabs[0]?.[0] ?? null,
+      activateFns: Object.keys(state).filter((key) => /activ|setActive/i.test(key) && typeof state[key] === 'function').slice(0, 30),
+      xterms: document.querySelectorAll('.xterm').length,
+      helpers: document.querySelectorAll('.xterm-helper-textarea').length,
+      visibleXterms: [...document.querySelectorAll('.xterm')].filter((el) => el.getClientRects().length).length,
+      size: [innerWidth, innerHeight],
+      visibility: document.visibilityState,
+      hasFocus: document.hasFocus(),
+      activeElement: document.activeElement?.tagName + '.' + String(document.activeElement?.className ?? '').slice(0, 60),
+      text: (document.body?.innerText ?? '').replace(/\s+/g, ' ').slice(0, 400)
+    }
+  })
+}
+
 async function focusTerminal(page) {
   await page.evaluate(() => {
     const state = window.__store.getState()
     const withTerminal = Object.entries(state.tabsByWorktree ?? {}).find(
-      ([, tabs]) => Array.isArray(tabs) && tabs.length > 0
-    )
+      ([, tabs]) => Array.isArray(tabs) && tabs.some((tab) => tab.type === undefined || tab.type === 'terminal' || tab.kind === 'terminal')
+    ) ?? Object.entries(state.tabsByWorktree ?? {}).find(([, tabs]) => Array.isArray(tabs) && tabs.length > 0)
     if (withTerminal && state.activeWorktreeId !== withTerminal[0]) {
       state.setActiveWorktree(withTerminal[0])
+    }
+    const tabs = state.tabsByWorktree?.[withTerminal?.[0]] ?? []
+    if (tabs[0]?.id && typeof state.setActiveTab === 'function') {
+      state.setActiveTab(tabs[0].id)
+    }
+    if (typeof state.setActiveView === 'function' && state.activeView && state.activeView !== 'terminal') {
+      state.setActiveView('terminal')
     }
   })
   await sleep(4_000)
@@ -635,6 +668,8 @@ async function measureKeys({ label, buildDir, seedDir, options, runDir, outDir }
     result.census = await readFleetCensus(page)
     if (!(await focusTerminal(page))) {
       result.notes.push('could not focus a terminal textarea')
+      result.focusDiagnostics = await focusDiagnostics(page, outDir, label).catch((error) => String(error))
+      console.log(`[keylat] focus diagnostics ${JSON.stringify(result.focusDiagnostics)}`)
       return result
     }
     const live = options.live ? await startLiveAgents(page, userDataDir) : null
@@ -730,6 +765,7 @@ async function keylatMain() {
   const outDir = get('--out', path.join(CACHE_ROOT, 'keylat-reports'))
   fs.mkdirSync(outDir, { recursive: true })
   virtualDisplay = await startVirtualDisplay()
+  console.log(`[keylat] virtual display ${virtualDisplay?.display ?? 'none (headless)'}`)
   const dirs = {}
   for (const build of builds) {
     dirs[build.label] = ensureBuild(repoRoot, build.sha)

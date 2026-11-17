@@ -91,8 +91,16 @@ async function postHook(endpoint, pane, payload) {
         payload: { session_id: `fleet-gate-${pane.paneKey}`, ...payload }
       })
     })
+    if (response.status !== 204 && !globalThis.__hookFailLogged) {
+      globalThis.__hookFailLogged = true
+      console.log(`[keylat] hook post ${response.status}: ${(await response.text().catch(() => '')).slice(0, 300)} pane ${pane.paneKey}`)
+    }
     return response.status === 204
-  } catch {
+  } catch (error) {
+    if (!globalThis.__hookFailLogged) {
+      globalThis.__hookFailLogged = true
+      console.log(`[keylat] hook post threw: ${String(error?.message ?? error).slice(0, 300)}`)
+    }
     return false
   }
 }
