@@ -16,6 +16,7 @@ import {
   getConfiguredBranchPrefix
 } from '../../ipc/worktrees/creation/worktree-branch-name'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
+import { getGitCurrentBranchName } from '../../../shared/git/refs/git-current-branch'
 import { resolveLocalGitUsername } from '../../git/repositories/git-username'
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
@@ -188,9 +189,9 @@ async function runAutoRename(
   }
   const exec: GitExec = (args) => gitExecFileAsync(args, { cwd: worktreePath })
 
-  const currentBranch = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
-  if (!currentBranch || currentBranch === 'HEAD') {
-    return retry(`no checked-out branch (${currentBranch || 'empty'})`)
+  const currentBranch = await getGitCurrentBranchName(exec)
+  if (!currentBranch) {
+    return retry('no checked-out branch')
   }
   if (!deps.canRenameOrcaCreatedBranch(worktreeId)) {
     return stop(`worktree is not eligible for auto-rename`, true)
@@ -248,7 +249,7 @@ async function runAutoRename(
       return stop('worktree is not eligible for auto-rename', true)
     }
     // Generation can outlive a branch switch or publication.
-    const branchNow = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+    const branchNow = await getGitCurrentBranchName(exec)
     if (branchNow !== currentBranch) {
       return retry(`branch changed during generation (${currentBranch} -> ${branchNow})`)
     }
