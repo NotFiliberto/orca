@@ -148,7 +148,8 @@ export class WorkerThreadChildProcess extends EventEmitter {
   abandon(message: string): void {
     const pid = this.pid
     if (this.nativeLike && !this.closed && pid === undefined) {
-      // The worker posts the pid as soon as the process exists and its messages drain before exit, so no pid means no process.
+      // The worker posts the pid as soon as the process exists and its messages drain before exit, so after an uncaught error
+      // or exit no pid means no process (only a V8 termination between the two, e.g. worker OOM, could break this).
       this.receive({ type: 'spawn-error', id: this.id, error: { message } })
       return
     }
@@ -194,7 +195,8 @@ export class WorkerThreadChildProcessHost {
   // A worker that dies before answering any launch is broken (e.g. a bad entry); stop routing optional launches to it.
   private servedBy: WorkerRequestTransport | null = null
   private brokenBeforeServing = false
-  private workerError: string | null = null
+  // Keyed by worker: an idle teardown between 'error' and 'exit' must not leave later workers marked failing.
+  private failing: { worker: WorkerRequestTransport | null; message: string } | null = null
 
   constructor(factory: WorkerThreadFactory) {
     this.host = new LazyWorkerThreadHost<WorkerThreadChildEvent>({
@@ -203,15 +205,15 @@ export class WorkerThreadChildProcessHost {
       onMessage: (event) => this.route(event),
       // 'exit' follows 'error' after the worker's queued messages are delivered; abandoning on 'error' would drop them.
       onError: (error) => {
-        this.workerError ??= error.message
+        this.failing = { worker: this.host.current, message: error.message }
       },
       onExit: (code) => {
-        const error = this.workerError
-        this.workerError = null
+        const failure = this.failing?.worker === this.host.current ? this.failing : null
+        this.failing = null
         this.abandonAll(
-          error === null
-            ? `Child process worker exited with code ${code}`
-            : `Child process worker failed: ${error}`
+          failure
+            ? `Child process worker failed: ${failure.message}`
+            : `Child process worker exited with code ${code}`
         )
       },
       isIdle: () => this.children.size === 0,
@@ -248,7 +250,7 @@ export class WorkerThreadChildProcessHost {
   trySpawn(spec: WorkerThreadChildSpec): WorkerThreadChildProcess | null {
     if (
       this.brokenBeforeServing ||
-      this.workerError !== null ||
+      this.failing?.worker === this.host.current ||
       this.pendingLaunches() >= MAX_PENDING_OPTIONAL_LAUNCHES
     ) {
       return null
