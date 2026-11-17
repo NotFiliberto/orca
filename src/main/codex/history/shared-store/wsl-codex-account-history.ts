@@ -1,113 +1,24 @@
-import { WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME } from '../../../../shared/remote-runtime/orcad-distribution/remote-bundle-artifacts'
-import { runWslGuestNodeHelper } from '../../../wsl/execution/wsl-guest-node-helper'
 import { runWslProcess } from '../../../wsl/execution/wsl-runner'
-import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
-import type { onRunningWslDistrosStopped } from '../../../wsl/discovery/wsl-running-distro-cache'
-import { onWslDistroGateNote } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { runCodexAppServerSession } from '../../app-server/codex-app-server-session'
 import { buildWslHealInvocation } from '../index/codex-session-index-heal'
 import {
   healCodexIndexPendingRollouts,
   isCodexAccountHistoryWorkStopping
 } from './codex-account-history-index'
+import {
+  checkInGuest,
+  defaultDependencies,
+  feedInGuest,
+  linkInGuest,
+  type HelperOutput,
+  type WslAccountHistoryDependencies,
+  type WslCodexAccountHistoryTarget,
+  type WslCodexHistorySourceTarget
+} from './wsl-codex-history-guest-helper'
 
-export type WslCodexAccountHistoryTarget = {
-  distro: string
-  /** Linux paths inside the distro. */
-  accountHome: string
-  storeHome: string
-  shared: boolean
-}
+export type { WslCodexAccountHistoryTarget, WslCodexHistorySourceTarget }
 
-type WslAccountHistoryDependencies = {
-  runHelper: typeof runWslGuestNodeHelper
-  /** Throws unless the distro runs; each step outlives the launch that started it (E9). */
-  requireRunning: (distro: string) => Promise<void>
-  subscribeStops: typeof onRunningWslDistrosStopped
-}
-
-const defaultDependencies: WslAccountHistoryDependencies = {
-  runHelper: runWslGuestNodeHelper,
-  requireRunning: (distro) => assertWslUncPathRunning('', distro),
-  // Gate notes carry running-list stops and explicit ones (a relay or watcher exit) no list saw yet.
-  subscribeStops: (listener) =>
-    onWslDistroGateNote((note) => {
-      if (note.kind === 'stopped') {
-        listener([note.distro], [])
-      }
-    })
-}
-
-// The helper may move a whole history on first run; pending names are ~75 bytes each.
-const HELPER_TIMEOUT_MS = 10 * 60_000
-const HELPER_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 const CLEAR_TIMEOUT_MS = 30_000
-
-type HelperOutput = { result: string; pendingDir: string; pending: string[] }
-
-/** Links (or unlinks) the home inside its distro; the guest helper also owns its sqlite_home. */
-async function linkInGuest(
-  target: WslCodexAccountHistoryTarget,
-  dependencies: WslAccountHistoryDependencies
-): Promise<HelperOutput | null> {
-  // Every wsl.exe step re-checks: the user may stop the distro mid-pass, and a step would boot it.
-  const stdout = await dependencies.runHelper({
-    distro: target.distro,
-    helperFilename: WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME,
-    helperLabel: 'Codex account history',
-    helperArgs: [target.shared ? 'share' : 'unshare', target.accountHome, target.storeHome],
-    timeoutMs: HELPER_TIMEOUT_MS,
-    maxOutputBytes: HELPER_MAX_OUTPUT_BYTES,
-    requireRunning: () => dependencies.requireRunning(target.distro)
-  })
-  return parseHelperOutput(stdout)
-}
-
-/** Compares the home's left-behind rollouts with the guest store within the helper's budget. */
-async function checkInGuest(
-  target: WslCodexAccountHistoryTarget,
-  dependencies: WslAccountHistoryDependencies
-): Promise<void> {
-  const stdout = await dependencies.runHelper({
-    distro: target.distro,
-    helperFilename: WSL_CODEX_ACCOUNT_HISTORY_HELPER_FILENAME,
-    helperLabel: 'Codex account history',
-    helperArgs: ['check', target.accountHome, target.storeHome],
-    timeoutMs: HELPER_TIMEOUT_MS,
-    requireRunning: () => dependencies.requireRunning(target.distro)
-  })
-  if (!parseHelperOutput(stdout)) {
-    throw new Error('The WSL Codex history check printed no summary')
-  }
-}
-
-/** Marker lines precede the summary; a missing summary means the list may be clipped. */
-function parseHelperOutput(stdout: string): HelperOutput | null {
-  const lines = stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-  let summary: unknown
-  try {
-    summary = JSON.parse(lines.at(-1) ?? '')
-  } catch {
-    return null
-  }
-  if (
-    !summary ||
-    typeof summary !== 'object' ||
-    !('pendingDir' in summary) ||
-    typeof summary.pendingDir !== 'string'
-  ) {
-    return null
-  }
-  // Login scripts may print before the helper; only rollout names are markers.
-  return {
-    result: 'result' in summary && typeof summary.result === 'string' ? summary.result : '',
-    pendingDir: summary.pendingDir,
-    pending: lines.slice(0, -1).filter((line) => line.startsWith('rollout-'))
-  }
-}
 
 /** Codex's own `thread/read` inside the distro indexes moved rollouts against the guest store. */
 async function healInGuest(
@@ -200,6 +111,9 @@ export class WslCodexAccountHistoryLaunches {
   // Shared homes whose left-behind rollouts await a content check, one guest check per distro.
   private readonly owedChecks = new Map<string, WslCodexAccountHistoryTarget>()
   private readonly checks = new Set<string>()
+  // The newest source feed requested per distro, run detached once no pass is queued there.
+  private readonly feedRequests = new Map<string, WslCodexHistorySourceTarget>()
+  private readonly feeds = new Set<string>()
 
   constructor(private readonly dependencies: WslAccountHistoryDependencies = defaultDependencies) {}
 
@@ -243,6 +157,7 @@ export class WslCodexAccountHistoryLaunches {
           this.startOwedCheck(distroKey)
         }
       })
+      .finally(() => queueMicrotask(() => this.startFeed(distroKey)))
       .catch((error: unknown) => {
         console.warn('[codex-account-history] WSL account history pass failed:', error)
       })
@@ -277,7 +192,8 @@ export class WslCodexAccountHistoryLaunches {
 
   // A pass may have recorded markers for files not moved yet, which a read would settle as missing.
   private startOwedHeal(distroKey: string): void {
-    const isPaused = (): boolean => (this.activePasses.get(distroKey) ?? 0) > 0
+    const isPaused = (): boolean =>
+      (this.activePasses.get(distroKey) ?? 0) > 0 || this.feeds.has(distroKey)
     const owed = this.owedHeals.get(distroKey)
     if (!owed || isPaused() || this.heals.has(distroKey) || isCodexAccountHistoryWorkStopping()) {
       return
@@ -337,6 +253,51 @@ export class WslCodexAccountHistoryLaunches {
       .finally(() => {
         this.checks.delete(distroKey)
         this.startOwedCheck(distroKey)
+      })
+  }
+
+  /** Feeds the distro's history source into its store in the background; launches don't wait. */
+  feedSource(target: WslCodexHistorySourceTarget): void {
+    const distroKey = target.distro.toLowerCase()
+    this.feedRequests.set(distroKey, target)
+    this.startFeed(distroKey)
+  }
+
+  private hasQueuedPass(distroKey: string): boolean {
+    return [...this.latest.keys()].some((key) => key.startsWith(`${distroKey}\0`))
+  }
+
+  // One feed per distro, never while a pass there is queued: both write the store's names.
+  private startFeed(distroKey: string): void {
+    const target = this.feedRequests.get(distroKey)
+    if (
+      !target ||
+      this.feeds.has(distroKey) ||
+      this.hasQueuedPass(distroKey) ||
+      isCodexAccountHistoryWorkStopping()
+    ) {
+      return
+    }
+    this.feedRequests.delete(distroKey)
+    this.feeds.add(distroKey)
+    // Counts as a pass for indexing: a heal must not settle a marker whose link hasn't landed.
+    this.startedPasses.set(distroKey, (this.startedPasses.get(distroKey) ?? 0) + 1)
+    void feedInGuest(target, this.dependencies)
+      .then((output) => {
+        if (output?.result === 'stopped') {
+          this.feedRequests.set(distroKey, this.feedRequests.get(distroKey) ?? target)
+        }
+        if (output && output.pending.length > 0) {
+          this.oweHeal(distroKey, { target: { ...target, accountHome: '', shared: true }, output })
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn('[codex-account-history] Linking the WSL Codex history source failed:', error)
+      })
+      .finally(() => {
+        // A stopped feed resumes after the next pass or launch there, never in a loop now.
+        this.feeds.delete(distroKey)
+        this.startOwedHeal(distroKey)
       })
   }
 }

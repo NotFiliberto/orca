@@ -11,8 +11,12 @@ import {
   requestHostCodexIndexHeal
 } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
+import { feedCodexHistorySource } from './codex-history-source-feed'
 
 type QueuedPass = { shared: boolean; pass: Promise<void> }
+
+// Launches re-feed so new source conversations arrive without a restart; many at once share one.
+const FEED_MIN_INTERVAL_MS = 60_000
 
 const INDEX_PENDING_DIR = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
@@ -26,13 +30,16 @@ export class CodexAccountHistoryPasses {
   private readonly latest = new Map<string, QueuedPass>()
   private tail: Promise<void> = Promise.resolve()
   private readonly settledThisRun = new Map<string, boolean>()
+  private feedRequest: string | null = null
+  private feeding: Promise<void> | null = null
+  private lastFeedAt = 0
   private activePasses = 0
   // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
   private readonly owedChecks = new Map<string, { accountHome: string }>()
   private checking = false
   private startedPasses = 0
   private readonly passProgress = {
-    isPaused: (): boolean => this.activePasses > 0,
+    isPaused: (): boolean => this.activePasses > 0 || this.feeding !== null,
     started: (): number => this.startedPasses
   }
 
@@ -54,6 +61,8 @@ export class CodexAccountHistoryPasses {
         }
         return
       }
+      // A running feed stops at its next file once this pass is queued.
+      await this.feeding
       this.activePasses += 1
       this.startedPasses += 1
       try {
@@ -71,8 +80,65 @@ export class CodexAccountHistoryPasses {
       if (this.latest.get(key)?.pass === pass) {
         this.latest.delete(key)
       }
+      this.startFeed()
     })
     return pass
+  }
+
+  /**
+   * Links a configured history source's rollouts into the store in the background: launches
+   * never wait on it, and it runs only while no pass is queued or running (both would race on the
+   * store's names), yielding to one that starts and resuming after it.
+   */
+  feedSource(sourceHome: string): void {
+    this.feedRequest = sourceHome
+    this.startFeed()
+  }
+
+  private startFeed(): void {
+    const sourceHome = this.feedRequest
+    if (
+      !sourceHome ||
+      this.feeding ||
+      this.latest.size > 0 ||
+      Date.now() - this.lastFeedAt < FEED_MIN_INTERVAL_MS ||
+      isCodexAccountHistoryWorkStopping()
+    ) {
+      return
+    }
+    this.feedRequest = null
+    // Counts as a pass for indexing: a heal must not settle a marker whose link hasn't landed.
+    this.startedPasses += 1
+    const yieldToPasses = (): boolean => this.latest.size > 0 || isCodexAccountHistoryWorkStopping()
+    this.feeding = feedCodexHistorySource({
+      sourceHome,
+      storeHome: getSystemCodexHomePath(),
+      indexPendingDir: INDEX_PENDING_DIR(),
+      shouldStop: yieldToPasses
+    })
+      .then((linked) => {
+        if (yieldToPasses()) {
+          this.feedRequest ??= sourceHome
+        } else {
+          this.lastFeedAt = Date.now()
+        }
+        return linked
+      })
+      .catch((error: unknown) => {
+        console.warn('[codex-account-history] Linking the Codex history source failed:', error)
+        return 0
+      })
+      .then((linked) => {
+        this.feeding = null
+        if (linked > 0) {
+          requestHostCodexIndexHeal(
+            INDEX_PENDING_DIR(),
+            getSystemCodexHomePath(),
+            this.passProgress
+          )
+        }
+        this.startFeed()
+      })
   }
 
   private async runPass(key: string, accountHome: string, shared: boolean): Promise<void> {
