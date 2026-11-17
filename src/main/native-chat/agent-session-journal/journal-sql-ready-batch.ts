@@ -48,6 +48,17 @@ export function prepareJournalSqlRequest(
       }
     }
   }
+  if (!batch && command.type === 'write' && !command.command.effects && !command.command.forkInstall) {
+    const { operation } = command.command
+    batch = {
+      sessionId: command.command.target.sessionId,
+      steps: operation.kind === 'steps' ? Math.max(1, operation.steps.length) : 1,
+      bytes:
+        operation.kind === 'steps'
+          ? operation.steps.reduce((total, step) => total + step.reservedBytes, 0)
+          : 4096
+    }
+  }
   return { id, command, ...(batch ? { batch } : {}) }
 }
 
