@@ -19,9 +19,9 @@ function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
   if (!(error instanceof Error)) {
     return { message: String(error) }
   }
-  const { code, errno, syscall, path, spawnargs } = error as NodeJS.ErrnoException & {
-    spawnargs?: unknown
-  }
+  const nodeError: NodeJS.ErrnoException = error
+  const { code, errno, syscall, path } = nodeError
+  const spawnargs = 'spawnargs' in error ? error.spawnargs : undefined
   return {
     message: error.message,
     ...(typeof code === 'string' ? { code } : {}),

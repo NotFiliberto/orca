@@ -163,6 +163,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
       return
     }
     // In-thread taskkill, started now: the worker is gone and so is its handle, so a delayed kill could hit a reused pid.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tree kill keys on this object and reads only exitCode, signalCode and exit listeners, which the stand-in has.
     void startWindowsTreeKill(this as unknown as ChildProcess, pid, () => {}).settled.then(
       (verdict) => {
         if (verdict !== 'exited' || this.closed) {
@@ -346,6 +347,6 @@ export function launchProcessSpecOffMainThreadOnWindows(spec: ProcessSpec): Chil
     cwd: spec.cwd,
     env: spec.env
   })
-  // The stand-in carries the piped surface runProcess and tree termination use: stdio events, stdin, pid, kill, exit and close.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in carries the piped surface runProcess and tree termination use: stdio events, stdin, pid, kill, exit and close.
   return child as unknown as ChildProcess | null
 }

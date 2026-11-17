@@ -146,6 +146,7 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
     expect(child.kill()).toBe(false)
   }, 20_000)
 
+  // Spawns a real Node child through the worker; Windows CI process startup can exceed the default timeout.
   it('serves runProcess as its launched child, stdin bytes included', async () => {
     const host = makeConnectedHost()
     const result = await runProcess({
@@ -153,6 +154,7 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
       args: ['-e', ECHO_SCRIPT],
       input: new TextEncoder().encode('{"id":2}\n'),
       launch: (spec) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in is what launchProcessSpecOffMainThreadOnWindows returns in production.
         host.spawn({
           program: spec.program,
           args: [...(spec.args ?? [])]
@@ -166,6 +168,7 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
     })
   }, 20_000)
 
+  // Spawns a real Node child through the worker; Windows CI process startup can exceed the default timeout.
   it('keeps the exit of a child that closes stdin unread, as a native child would', async () => {
     const host = makeConnectedHost()
     const result = await runProcess({
@@ -173,6 +176,7 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
       args: ['-e', 'process.stderr.write("early"); process.exit(3)'],
       input: 'x'.repeat(4 * 1024 * 1024),
       launch: (spec) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in is what launchProcessSpecOffMainThreadOnWindows returns in production.
         host.trySpawn({
           program: spec.program,
           args: [...(spec.args ?? [])]

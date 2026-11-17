@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
+import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { StringDecoder } from 'node:string_decoder'
@@ -25,11 +25,8 @@ import {
 } from './host-routing/git-command-resolution'
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
-import { gitSpawnLaunch } from './git-spawn'
-import {
-  spawnOffMainThreadOnWindows,
-  type WorkerThreadChildProcess
-} from '../../worker-thread-child-process/worker-thread-child-process'
+import { launchStreamingGitChild } from './git-stream-child-launch'
+import type { WorkerThreadChildProcess } from '../../worker-thread-child-process/worker-thread-child-process'
 import { acquireGitAdmission } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
@@ -128,42 +125,7 @@ function streamInSpan(
           )
           child = posixGroupChild
         } else {
-          const directGit = command.wslMode === 'direct-git'
-          const launch = directGit
-            ? {
-                binary: command.binary,
-                args: command.args,
-                options: { cwd: command.cwd, env: untranslatedGitOutputEnv(spawnOptions.env) }
-              }
-            : gitSpawnLaunch(args, spawnOptions)
-          const offMainChild = spawnOffMainThreadOnWindows({
-            program: launch.binary,
-            args: launch.args,
-            cwd: typeof launch.options.cwd === 'string' ? launch.options.cwd : undefined,
-            env: launch.options.env
-          })
-          if (offMainChild) {
-            // The worker always pipes stdin; close it as the ignored stdin was.
-            offMainChild.stdin.end()
-            child = offMainChild
-          } else if (directGit) {
-            const spawnStartedAt = performance.now()
-            child = spawn(command.binary, command.args, {
-              cwd: command.cwd,
-              env: launch.options.env,
-              stdio: spawnOptions.stdio,
-              windowsHide: true
-            })
-            recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
-          } else {
-            child = spawnNativeProcess(
-              launch.binary,
-              launch.args,
-              launch.options,
-              undefined,
-              recordSubprocessSpawn
-            )
-          }
+          child = launchStreamingGitChild(command, args, spawnOptions)
         }
         let stopping = false
         let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined

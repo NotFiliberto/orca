@@ -131,6 +131,7 @@ describe('abort', () => {
     const controller = new AbortController()
     const onChildTerminated = vi.fn()
     const launched = Object.assign(new EventEmitter(), {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake starts without a pid, as a launched child does.
       pid: undefined as number | undefined,
       exitCode: null,
       signalCode: null,
@@ -143,6 +144,7 @@ describe('abort', () => {
       program: 'launched-elsewhere',
       signal: controller.signal,
       onChildTerminated,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries only the surface runProcess reads before the pid arrives.
       launch: () => launched as unknown as ChildProcess
     })
     controller.abort()
