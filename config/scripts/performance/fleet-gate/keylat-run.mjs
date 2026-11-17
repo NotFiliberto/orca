@@ -736,6 +736,19 @@ async function keylatMain() {
   }
   let seedDir = get('--seed', null)
   if (!seedDir) {
+    // Reuse the fleet gate's synthetic seed when one exists (copied per run, never written).
+    const shared = path.join(os.homedir(), '.cache', 'orca-fleet-gate', 'seeds')
+    const candidates = fs.existsSync(shared)
+      ? fs
+          .readdirSync(shared)
+          .map((name) => path.join(shared, name))
+          .filter((dir) => readSeedReceipt(dir))
+          .sort((a, b) => fs.statSync(path.join(b, '.fleet-seed.json')).mtimeMs - fs.statSync(path.join(a, '.fleet-seed.json')).mtimeMs)
+      : []
+    seedDir = candidates[0] ?? null
+    console.log(`[keylat] seed ${seedDir ?? 'none shared; building own'} ${seedDir ? JSON.stringify(readSeedReceipt(seedDir)?.census) : ''}`)
+  }
+  if (!seedDir) {
     const seeded = await ensureSeed({ oldSha: builds[0].sha, oldBuild: dirs[builds[0].label], outDir })
     seedDir = seeded.seedDir
   }
