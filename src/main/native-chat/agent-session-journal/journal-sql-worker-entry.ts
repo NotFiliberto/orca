@@ -96,7 +96,12 @@ port.on('message', (request: JournalSqlRequest) => {
     void checkpointClosing?.catch(() => undefined)
   }
   receivedAt.set(request.id, performance.now())
-  queue.push(request)
+  if (request.urgent) {
+    const bulk = queue.findIndex((queued) => !queued.urgent)
+    queue.splice(bulk === -1 ? queue.length : bulk, 0, request)
+  } else {
+    queue.push(request)
+  }
   if (!scheduled) {
     scheduled = true
     setImmediate(() => {
@@ -171,7 +176,8 @@ async function drain(): Promise<void> {
           (request) => request.command.type === 'write' && request.command.command.forkInstall
         )
           ? 'full'
-          : 'normal'
+          : 'normal',
+        !pending.every((request) => request.urgent)
       )
       forks!.acknowledge()
       // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.

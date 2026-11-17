@@ -37,6 +37,7 @@ export class JournalSqlOwner {
     }
   >()
   private nextId = 0
+  private readonly urgentUntil = new Map<string, number>()
   private failure: Error | undefined
   private closing = false
   private didExit = false
@@ -174,12 +175,24 @@ export class JournalSqlOwner {
         postedAt: performance.now()
       })
       try {
-        this.worker.postMessage(prepareJournalSqlRequest(id, command))
+        this.worker.postMessage(this.markUrgent(prepareJournalSqlRequest(id, command)))
       } catch (error) {
         this.pending.delete(id)
         reject(error)
       }
     })
+  }
+
+  private markUrgent(request: JournalSqlRequest): JournalSqlRequest {
+    if (request.command.type !== 'write') {
+      return request
+    }
+    const { target, operation } = request.command.command
+    const now = Date.now()
+    if (operation.kind !== 'steps') {
+      this.urgentUntil.set(target.sessionId, now + 10_000)
+    }
+    return (this.urgentUntil.get(target.sessionId) ?? 0) > now ? { ...request, urgent: true } : request
   }
 
   private async finishClose(): Promise<void> {
