@@ -78,7 +78,9 @@ export async function abortRebase(
   )
 }
 
-export const AUTOSTASH_REAPPLY_CONFLICT = /Applying autostash resulted in conflicts/i
+// Git 2.55 reworded "Applying autostash resulted in conflicts"; match both.
+export const AUTOSTASH_REAPPLY_CONFLICT =
+  /Applying autostash resulted in conflicts|local changes are stashed, however applying them\s+resulted in conflicts|could not apply autostash/i
 
 /** Git refuses to rebase over tracked changes unless rebase.autoStash is on. */
 export async function readRebaseAutoStash(
