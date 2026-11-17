@@ -1,0 +1,11 @@
+--- a/src/main/runtime/orchestration/db/maintenance/settled-run-retirement.ts	2026-11-17 14:50:37
++++ b/src/main/runtime/orchestration/db/maintenance/settled-run-retirement.ts	2026-11-17 14:50:37
+@@ -213,7 +213,7 @@
+       anyPartyLive() ||
+       isRetiringRunWritten(orchestrationDb) ||
+       !isRetiredRun(db, runId) ||
+-      runParties(orchestrationDb, runId).some((party) => !parties.has(party))
++      runParties(orchestrationDb, runId).some((party) => !checkedParties.includes(party))
+     ) {
+       return false
+     }
