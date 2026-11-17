@@ -369,7 +369,7 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
   }
   try {
     const page = await waitForAppWindow(app, { label, userDataDir, outDir, stderrTail })
-    return { app, page, close, ownershipText: () => ownershipText }
+    return { app, page, close, ownershipText: () => ownershipText, stderrTail, child }
   } catch (error) {
     await close()
     throw error
@@ -463,9 +463,12 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
   fs.cpSync(seedDir, userDataDir, { recursive: true, mode: fs.constants.COPYFILE_FICLONE })
   const result = { arm, sha, windows: {}, census: null, notes: [] }
   const label = `${arm}-${sha.slice(0, 11)}`
-  const { app, page, close } = await launchCopy({ buildDir, runDir, userDataDir, label, outDir })
+  const { app, page, close, stderrTail, child } = await launchCopy({ buildDir, runDir, userDataDir, label, outDir })
   try {
-    const probeState = await installMainProbeIn(app)
+    const probeState = await installMainProbeIn(app).catch((error) => {
+      console.log(`[fleet-gate] ${label} main probe failed; exit ${child.exitCode} signal ${child.signalCode}; stderr tail:\n${stderrTail.join('\n')}`)
+      throw error
+    })
     if (probeState !== 'installed') {
       result.notes.push(`main probe ${probeState}: R→M counts only send(), not invoke()`)
     }
