@@ -50,7 +50,8 @@ export async function retryGitFetchRefRace<T>(
   args: readonly string[],
   initialError: unknown,
   attempt: () => Promise<T>,
-  terminated: () => Promise<void> | null,
+  /** Resolves false when the previous child's end can't be proven (its worker was lost): never replay over it. */
+  terminated: () => Promise<boolean> | null,
   signal?: AbortSignal,
   canStart?: () => boolean
 ): Promise<T> {
@@ -77,7 +78,9 @@ export async function retryGitFetchRefRace<T>(
         cause: initialError
       })
     }
-    await waitForPromiseWithSignal(terminated() ?? Promise.resolve(), signal)
+    if (!(await waitForPromiseWithSignal(terminated() ?? Promise.resolve(true), signal))) {
+      throw error
+    }
     await delay(50 + retry * 100 + Math.floor(Math.random() * 50), undefined, { signal })
     throwIfSignalAborted(signal)
     if (canStart?.() === false) {

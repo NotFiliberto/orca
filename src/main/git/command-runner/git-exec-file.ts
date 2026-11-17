@@ -87,12 +87,14 @@ async function gitExecFileAsyncUnlocked(
       span?.setAttribute('git.runs_in', gitRunsIn(resolved))
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
       let admissionReturned: Promise<void> | null = null
+      let terminationProven: Promise<boolean> | null = null
       const capture = (
         command: ResolvedCommand
       ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> => {
         const tracking = trackGitChildAdmission()
         terminationState.current = tracking.terminated
         admissionReturned = tracking.admissionReturned
+        terminationProven = tracking.terminationProven
         options.observeChildTermination?.(
           terminationState.current,
           classifyGitCommand(args) !== 'read'
@@ -178,7 +180,7 @@ async function gitExecFileAsyncUnlocked(
           args,
           error,
           runCapturedCommand,
-          () => terminationState.current,
+          () => terminationProven,
           options.signal,
           options.canStart
         )

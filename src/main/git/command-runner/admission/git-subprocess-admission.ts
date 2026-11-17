@@ -31,6 +31,8 @@ export function releaseGitAdmissionAfter(
 export function trackGitChildAdmission(): {
   terminated: Promise<void>
   admissionReturned: Promise<void>
+  /** True on proven termination, false once the worker is lost first. */
+  terminationProven: Promise<boolean>
   onChildTerminated: () => void
   onWorkerLost: () => void
 } {
@@ -39,13 +41,15 @@ export function trackGitChildAdmission(): {
   const terminated = new Promise<void>((resolve) => {
     onChildTerminated = resolve
   })
-  const admissionReturned = Promise.race([
-    terminated,
-    new Promise<void>((resolve) => {
-      onWorkerLost = resolve
-    })
+  const workerLost = new Promise<void>((resolve) => {
+    onWorkerLost = resolve
+  })
+  const terminationProven = Promise.race([
+    terminated.then(() => true),
+    workerLost.then(() => false)
   ])
-  return { terminated, admissionReturned, onChildTerminated, onWorkerLost }
+  const admissionReturned = terminationProven.then(() => {})
+  return { terminated, admissionReturned, terminationProven, onChildTerminated, onWorkerLost }
 }
 
 export function _resetGitAdmissionForTests(replacement = new GitAdmissionScheduler()): void {
