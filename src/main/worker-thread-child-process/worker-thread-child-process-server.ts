@@ -53,6 +53,10 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
     }
+    // Report the pid as soon as the process exists, so a worker that dies next can't leave it unaccounted for.
+    if (child.pid !== undefined) {
+      port.postMessage({ type: 'spawn', id, pid: child.pid })
+    }
     const state: NonNullable<ReturnType<typeof children.get>> = {
       child,
       pendingOutputBytes: 0,
@@ -84,7 +88,6 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       port.postMessage({ type: 'error', id, error: toErrorPayload(error) })
     const postStdinError = (error: Error): void =>
       port.postMessage({ type: 'error', id, error: toErrorPayload(error), stdin: true })
-    child.on('spawn', () => port.postMessage({ type: 'spawn', id, pid: child.pid }))
     child.stdout?.on('data', (chunk: Buffer) => postOutput('stdout', chunk))
     child.stderr?.on('data', (chunk: Buffer) => postOutput('stderr', chunk))
     // An unhandled stream error would take the whole worker, and every other child, down.
@@ -95,10 +98,11 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     child.on('exit', (code, signal) => port.postMessage({ type: 'exit', id, code, signal }))
     child.on('close', (code, signal) => {
       state.closed = true
-      if (!state.group || state.groupTerminated) {
+      const retained = Boolean(state.group) && !state.groupTerminated
+      if (!retained) {
         children.delete(id)
       }
-      port.postMessage({ type: 'close', id, code, signal })
+      port.postMessage({ type: 'close', id, code, signal, ...(retained ? { retained: true } : {}) })
       if (state.stopping) {
         state.group?.close()
       }

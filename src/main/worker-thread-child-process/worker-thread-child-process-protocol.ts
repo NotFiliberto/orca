@@ -39,4 +39,12 @@ export type WorkerThreadChildEvent =
       error: WorkerThreadChildErrorPayload
       stdin?: true
     }
-  | { type: 'exit' | 'close'; id: number; code: number | null; signal: NodeJS.Signals | null }
+  | { type: 'exit'; id: number; code: number | null; signal: NodeJS.Signals | null }
+  // 'retained': the worker still tracks the child (an owned POSIX group) until main sends 'release'.
+  | {
+      type: 'close'
+      id: number
+      code: number | null
+      signal: NodeJS.Signals | null
+      retained?: true
+    }

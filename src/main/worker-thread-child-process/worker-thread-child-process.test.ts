@@ -255,6 +255,30 @@ describe('WorkerThreadChildProcessHost with a stalled worker', () => {
   })
 })
 
+describe('WorkerThreadChildProcessHost when the worker dies', () => {
+  it('fails a launch the worker never started, so its caller is released', async () => {
+    const worker = Object.assign(new EventEmitter(), {
+      postMessage: () => {},
+      unref: () => {},
+      terminate: async () => 0
+    })
+    const host = new WorkerThreadChildProcessHost(() => worker)
+    const child = host.trySpawn({ program: process.execPath, args: ['-e', ''] })
+    if (!child) {
+      throw new Error('worker launch was refused')
+    }
+    const errors: string[] = []
+    child.on('error', (error) => errors.push(error.message))
+    const closed = waitForClose(child)
+
+    worker.emit('error', new Error('boom'))
+    worker.emit('exit', 1)
+
+    await expect(closed).resolves.toEqual([-1, null])
+    expect(errors).toEqual(['Child process worker failed: boom'])
+  })
+})
+
 // Real thread death closes child pipes; abandoned probes depend on that graceful stop instead of PID-addressed killing.
 describe('WorkerThreadChildProcessHost on a real worker thread', () => {
   let directory = ''

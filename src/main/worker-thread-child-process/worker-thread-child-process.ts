@@ -146,9 +146,14 @@ export class WorkerThreadChildProcess extends EventEmitter {
 
   /** The worker is gone: a native-like child closes only once a tree kill proves it ended, so callers keep their locks while it may still run; others keep the error-only contract. */
   abandon(message: string): void {
-    this.emitErrorIfObserved({ message })
     const pid = this.pid
-    // No pid proves nothing (the worker may have created the process unreported); an exited root's pid may be reused.
+    if (this.nativeLike && !this.closed && pid === undefined) {
+      // The worker posts the pid as soon as the process exists and its messages drain before exit, so no pid means no process.
+      this.receive({ type: 'spawn-error', id: this.id, error: { message } })
+      return
+    }
+    this.emitErrorIfObserved({ message })
+    // An exited root's pid may be reused.
     if (
       !this.nativeLike ||
       this.closed ||
@@ -189,14 +194,26 @@ export class WorkerThreadChildProcessHost {
   // A worker that dies before answering any launch is broken (e.g. a bad entry); stop routing optional launches to it.
   private servedBy: WorkerRequestTransport | null = null
   private brokenBeforeServing = false
+  private workerError: string | null = null
 
   constructor(factory: WorkerThreadFactory) {
     this.host = new LazyWorkerThreadHost<WorkerThreadChildEvent>({
       factory,
       idleTeardownMs: IDLE_TEARDOWN_MS,
       onMessage: (event) => this.route(event),
-      onError: (error) => this.abandonAll(`Child process worker failed: ${error.message}`),
-      onExit: (code) => this.abandonAll(`Child process worker exited with code ${code}`),
+      // 'exit' follows 'error' after the worker's queued messages are delivered; abandoning on 'error' would drop them.
+      onError: (error) => {
+        this.workerError ??= error.message
+      },
+      onExit: (code) => {
+        const error = this.workerError
+        this.workerError = null
+        this.abandonAll(
+          error === null
+            ? `Child process worker exited with code ${code}`
+            : `Child process worker failed: ${error}`
+        )
+      },
       isIdle: () => this.children.size === 0,
       onUnavailable: (error) =>
         console.warn(
@@ -229,7 +246,11 @@ export class WorkerThreadChildProcessHost {
 
   /** A native-like child, or null when the worker cannot start or proved broken, so the caller spawns in-thread instead. */
   trySpawn(spec: WorkerThreadChildSpec): WorkerThreadChildProcess | null {
-    if (this.brokenBeforeServing || this.pendingLaunches() >= MAX_PENDING_OPTIONAL_LAUNCHES) {
+    if (
+      this.brokenBeforeServing ||
+      this.workerError !== null ||
+      this.pendingLaunches() >= MAX_PENDING_OPTIONAL_LAUNCHES
+    ) {
       return null
     }
     return this.host.ensure() ? this.spawn(spec, true) : null
@@ -265,7 +286,7 @@ export class WorkerThreadChildProcessHost {
       return
     }
     child.receive(event)
-    if (event.type === 'close') {
+    if (event.type === 'close' && event.retained) {
       this.post({ type: 'release', id: event.id })
     }
     if (
