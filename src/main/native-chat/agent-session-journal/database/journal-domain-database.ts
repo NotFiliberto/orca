@@ -138,6 +138,7 @@ export function openJournalDomainDatabase(filename: string): OpenJournalDatabase
     db.pragma('journal_mode = WAL')
     db.pragma('synchronous = NORMAL')
     db.pragma('checkpoint_fullfsync = ON')
+    db.pragma('cache_size = -65536')
     db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)
     migrateJournalDomainSchema(db)
     ensurePRWatchTables(db)
