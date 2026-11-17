@@ -5,7 +5,7 @@ import type {
 } from '../../../../shared/git/remotes/git-fork-sync'
 import type {
   ContinueRebaseAction,
-  ContinueRebaseExpectedStop,
+  RebaseStopToken,
   ContinueRebaseResult,
   GitUpstreamStatus,
   RebaseFromBaseResult
@@ -60,7 +60,7 @@ export class RuntimeGitSyncCommands {
   async continueRuntimeGitRebase(
     worktreeSelector: string,
     action: ContinueRebaseAction = 'continue',
-    expected?: ContinueRebaseExpectedStop
+    expected?: RebaseStopToken
   ): Promise<ContinueRebaseResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     return requireRuntimeGitProvider(target).continueRebase(target.worktree.path, action, expected)

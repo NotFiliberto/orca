@@ -13290,18 +13290,14 @@
             "rebaseResolveConflictsFirst": "먼저 충돌을 해결하세요",
             "rebaseAbort": "중단",
             "rebaseContinue": "계속",
-            "rebaseSkip": "건너뛰기",
-            "rebaseEmptyCommitLabel": "빈 커밋",
             "continueRebasePausedAgain": "다음 충돌에서 리베이스가 일시 중지됨",
             "continueRebaseFailed": "리베이스 계속 실패",
-            "skipRebaseCommitFailed": "커밋 건너뛰기 실패",
             "rebaseAutostashConflict": "리베이스했습니다. 커밋하지 않은 변경 사항을 깔끔하게 다시 적용하지 못해 stash에 저장했습니다.",
-            "rebaseEmptyCommit": "여기에는 커밋할 내용이 없습니다. 이 커밋을 건너뛰거나 리베이스를 중단하세요.",
             "rebaseStoppedByGit": "Git이 리베이스를 일시 중지했습니다",
             "continueRebaseUnconfirmed": "결과를 확인할 수 없습니다. 소스 제어를 새로 고쳐 현재 상태를 표시했습니다.",
             "noRebaseInProgress": "진행 중인 리베이스가 없습니다",
-            "skipNeedsCleanTree": "건너뛰기 전에 편집 내용을 커밋, 스태시 또는 폐기하세요.",
-            "skipStopMovedOn": "리베이스가 이미 다음 단계로 진행되었습니다. 패널을 확인하고 다시 시도하세요."
+            "rebaseStopMovedOn": "리베이스가 이미 다음 단계로 진행되었습니다. 패널을 확인하고 다시 시도하세요.",
+            "rebaseEmptyStep": "이 단계에는 커밋할 내용이 없습니다. 리베이스를 중단하거나 터미널에서 마무리하세요."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -13807,9 +13803,7 @@
                   "rebaseOntoNamedBase": "{{base}}(으)로 리베이스",
                   "rebaseCommitOrStashFirst": "먼저 변경 사항을 커밋하거나 스태시하세요",
                   "continueRebase": "리베이스 계속",
-                  "titleContinueRebase": "일시 중지된 리베이스 계속",
-                  "skipRebaseCommit": "커밋 건너뛰기",
-                  "titleSkipRebaseCommit": "비어 있게 된 이 커밋을 버리고 리베이스 계속"
+                  "titleContinueRebase": "일시 중지된 리베이스 계속"
                 }
               },
               "primary": {

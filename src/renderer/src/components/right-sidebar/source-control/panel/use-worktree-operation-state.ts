@@ -41,7 +41,7 @@ export function useSourceControlWorktreeOperationState({
   const isAbortingOperation = useStore(operationView, (s) => s.isAbortingOperation)
   const isContinuingRebase = useStore(operationView, (s) => s.isContinuingRebase)
   const rebaseAutoStash = useStore(operationView, (s) => s.rebaseAutoStash)
-  const rebaseEmptyStop = useStore(operationView, (s) => s.rebaseEmptyStop)
+  const rebaseStop = useStore(operationView, (s) => s.rebaseStop)
   const orcaRebase = useStore(operationView, (s) => s.orcaRebase)
   const remoteActionError = useStore(operationView, (s) => s.remoteActionError)
   const activeRemoteActionSequence = useStore(operationView, (s) =>
@@ -66,18 +66,11 @@ export function useSourceControlWorktreeOperationState({
 
   useEffect(() => {
     // Terminal conflict resolution must clear stale failure banners once status observes the operation ending.
-    const { observedConflictOperation, remoteActionError, orcaRebase, isContinuingRebase } =
-      operationStore.getState()
-    const leftRebase = observedConflictOperation === 'rebase' && conflictOperation !== 'rebase'
+    const { observedConflictOperation, remoteActionError } = operationStore.getState()
     operationStore.setState({
       observedConflictOperation: conflictOperation,
-      // An empty stop belongs to one paused rebase; any operation change retires it.
-      ...(observedConflictOperation !== conflictOperation ? { rebaseEmptyStop: null } : {}),
-      // Leaving a rebase Orca had not finished means it was aborted or finished elsewhere; an
-      // in-flight Continue can land here first and promotes the marker when its result returns.
-      ...(leftRebase && orcaRebase?.state === 'paused' && !isContinuingRebase
-        ? { orcaRebase: null }
-        : {}),
+      // A stop reading belongs to one paused rebase; any operation change retires it.
+      ...(observedConflictOperation !== conflictOperation ? { rebaseStop: null } : {}),
       ...(remoteActionError &&
       remoteActionErrorSettledByConflictOperation(
         remoteActionError,
@@ -102,7 +95,7 @@ export function useSourceControlWorktreeOperationState({
     operationStore,
     recordBranchSwitchOutcome,
     rebaseAutoStash,
-    rebaseEmptyStop,
+    rebaseStop,
     orcaRebase,
     remoteActionError,
     updateCommitDraft

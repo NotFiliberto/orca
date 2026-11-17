@@ -20,7 +20,6 @@ export function useSourceControlActionDispatch({
   handleCommit,
   handleContinueRebase,
   handleCreatePullRequest,
-  handleSkipRebaseCommit,
   handleStageAllPrimary,
   isCreatePrIntentInFlight,
   isCreatingPr,
@@ -36,7 +35,6 @@ export function useSourceControlActionDispatch({
   handleAbortMerge: SourceControlConflictAbort['handleAbortMerge']
   handleAbortRebase: SourceControlConflictAbort['handleAbortRebase']
   handleContinueRebase: SourceControlRebaseContinue['handleContinueRebase']
-  handleSkipRebaseCommit: SourceControlRebaseContinue['handleSkipRebaseCommit']
   handleCommit: SourceControlCommitAction['handleCommit']
   handleCreatePullRequest: SourceControlHostedReviewCreation['handleCreatePullRequest']
   handleStageAllPrimary: SourceControlFileListing['handleStageAllPrimary']
@@ -74,9 +72,6 @@ export function useSourceControlActionDispatch({
         case 'continue_rebase':
           void handleContinueRebase()
           return
-        case 'skip_rebase_commit':
-          void handleSkipRebaseCommit()
-          return
         case 'create_pr':
           void handleCreatePullRequest()
           return
@@ -100,7 +95,6 @@ export function useSourceControlActionDispatch({
       handleAbortMerge,
       handleAbortRebase,
       handleContinueRebase,
-      handleSkipRebaseCommit,
       isCreatingPr,
       isCreatePrIntentInFlight,
       prGenerating,

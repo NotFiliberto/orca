@@ -1,11 +1,9 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { continueRuntimeGitRebase } from '@/runtime/source-control/git/runtime-git-rebase-client'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type {
-  ContinueRebaseAction,
-  ContinueRebaseExpectedStop,
   ContinueRebaseResult,
   GitConflictOperation
 } from '../../../../../../shared/git/status/git-status-types'
@@ -15,23 +13,22 @@ import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
+import { recordRebaseStopReading } from './orca-rebase-marker'
 
-function failureTitle(action: ContinueRebaseAction): string {
-  return action === 'skip'
-    ? translate(
-        'auto.components.right.sidebar.SourceControl.skipRebaseCommitFailed',
-        'Skip commit failed'
-      )
-    : translate(
-        'auto.components.right.sidebar.SourceControl.continueRebaseFailed',
-        'Continue rebase failed'
-      )
+type OperationStore = SourceControlWorktreeOperationState['operationStore']
+
+function continueFailureTitle(): string {
+  return translate(
+    'auto.components.right.sidebar.SourceControl.continueRebaseFailed',
+    'Continue rebase failed'
+  )
 }
 
 // Only a completed outcome reads as success; every other stop keeps the paused strip and says why.
-function announceRebaseStep(action: ContinueRebaseAction, result: ContinueRebaseResult): void {
+function announceRebaseStep(result: ContinueRebaseResult): void {
   switch (result.outcome) {
     case 'completed':
+    case 'inspected':
       return
     case 'completed_autostash_conflict':
       toast.warning(
@@ -52,8 +49,8 @@ function announceRebaseStep(action: ContinueRebaseAction, result: ContinueRebase
     case 'empty':
       toast.info(
         translate(
-          'auto.components.right.sidebar.SourceControl.rebaseEmptyCommit',
-          'Nothing left to commit here. Skip this commit or abort the rebase.'
+          'auto.components.right.sidebar.SourceControl.rebaseEmptyStep',
+          'Nothing to commit in this step. Abort the rebase or finish it in a terminal.'
         )
       )
       return
@@ -74,68 +71,46 @@ function announceRebaseStep(action: ContinueRebaseAction, result: ContinueRebase
         )
       )
       return
-    case 'skip_refused_dirty':
-      toast.error(failureTitle(action), {
+    case 'stale':
+      toast.error(continueFailureTitle(), {
         description: translate(
-          'auto.components.right.sidebar.SourceControl.skipNeedsCleanTree',
-          'Commit, stash or discard your edits before skipping.'
-        )
-      })
-      return
-    case 'skip_refused_stale':
-      toast.error(failureTitle(action), {
-        description: translate(
-          'auto.components.right.sidebar.SourceControl.skipStopMovedOn',
+          'auto.components.right.sidebar.SourceControl.rebaseStopMovedOn',
           'The rebase already moved on. Check the panel and try again.'
         )
       })
       return
     case 'failed':
-      toast.error(failureTitle(action), { description: result.message })
+      toast.error(continueFailureTitle(), { description: result.message })
   }
 }
 
-// Finishing the rebase Orca started (same branch) arms the Pull-hiding marker.
-function promoteOrcaRebaseMarker(
-  operationStore: SourceControlWorktreeOperationState['operationStore'],
-  result: ContinueRebaseResult
-): void {
-  const marker = operationStore.getState().orcaRebase
-  if (
-    (result.outcome === 'completed' || result.outcome === 'completed_autostash_conflict') &&
-    marker?.state === 'paused' &&
-    result.branch === marker.branch
-  ) {
-    operationStore.setState({ orcaRebase: { ...marker, state: 'done' } })
+// Module-level so the hooks stay React Compiler friendly (no try/finally inside them).
+async function inspectRebaseStop(context: RuntimeGitContext, operationStore: OperationStore) {
+  try {
+    recordRebaseStopReading(operationStore, await continueRuntimeGitRebase(context, 'inspect'))
+  } catch {
+    // Unread stops keep Continue disabled; the next status change reads again.
   }
 }
 
-// Module-level so the hook stays React Compiler friendly (no try/finally inside it).
-async function runRebaseStepRequest({
-  action,
+async function runContinueRequest({
   context,
-  expected,
   operationStore,
   refresh
 }: {
-  action: ContinueRebaseAction
   context: RuntimeGitContext
-  expected: ContinueRebaseExpectedStop | undefined
-  operationStore: SourceControlWorktreeOperationState['operationStore']
+  operationStore: OperationStore
   refresh: () => void
 }): Promise<void> {
+  const expected = operationStore.getState().rebaseStop?.token
   try {
-    const result = await continueRuntimeGitRebase(context, action, expected)
-    if (result.outcome === 'empty') {
-      operationStore.setState({
-        rebaseEmptyStop: { head: result.head ?? null, step: result.step ?? null }
-      })
-    }
-    promoteOrcaRebaseMarker(operationStore, result)
-    announceRebaseStep(action, result)
+    const result = await continueRuntimeGitRebase(context, 'continue', expected)
+    recordRebaseStopReading(operationStore, result)
+    announceRebaseStep(result)
   } catch (error) {
-    // A transport timeout leaves the host's result unknown; the refresh below shows the truth.
-    toast.error(failureTitle(action), {
+    // A transport timeout leaves the host's result unknown; re-read the stop before any retry.
+    operationStore.setState({ rebaseStop: null })
+    toast.error(continueFailureTitle(), {
       description:
         error instanceof Error && error.message
           ? error.message
@@ -155,6 +130,7 @@ export function useSourceControlRebaseContinue({
   activeWorktreeId,
   conflictOperation,
   operationStore,
+  rebaseStopUnread,
   refreshActiveGitStatusAfterMutation,
   refreshBranchCompareRef,
   refreshGitHistoryRef,
@@ -163,66 +139,77 @@ export function useSourceControlRebaseContinue({
   activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   conflictOperation: GitConflictOperation
-  operationStore: SourceControlWorktreeOperationState['operationStore']
+  operationStore: OperationStore
+  // The paused rebase has no reading for the current HEAD yet.
+  rebaseStopUnread: boolean
   refreshActiveGitStatusAfterMutation: SourceControlStatusRefresh['refreshActiveGitStatusAfterMutation']
   refreshBranchCompareRef: React.RefObject<() => Promise<void>>
   refreshGitHistoryRef: React.RefObject<() => Promise<void>>
   worktreePath: string | null
 }) {
   const scope = useSourceControlScope()
-  const runRebaseStep = useCallback(
-    async (action: ContinueRebaseAction): Promise<void> => {
-      if (
-        !activeWorktreeId ||
-        !worktreePath ||
-        conflictOperation !== 'rebase' ||
-        operationStore.getState().isAbortingOperation
-      ) {
-        return
-      }
-      // Skip may only drop the exact empty stop the user was shown.
-      const expected =
-        action === 'skip' ? (operationStore.getState().rebaseEmptyStop ?? undefined) : undefined
-      // isAbortingOperation is the shared conflict-operation lock that Abort and the busy gates read.
-      operationStore.setState({
-        isAbortingOperation: true,
-        isContinuingRebase: true,
-        rebaseEmptyStop: null,
-        remoteActionError: null
-      })
-      await runRebaseStepRequest({
-        action,
-        context: {
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId: sourceControlConnectionId(scope, activeWorktreeId)
-        },
-        expected,
-        operationStore,
-        refresh: () =>
-          refreshSourceControlAfterRemoteAction({
-            worktreeId: activeWorktreeId,
-            refreshGitStatus: refreshActiveGitStatusAfterMutation,
-            refreshBranchCompare: refreshBranchCompareRef.current,
-            refreshGitHistory: refreshGitHistoryRef.current
-          })
-      })
-    },
-    [
-      scope,
-      activeRepoTarget,
-      activeWorktreeId,
-      conflictOperation,
+  const shouldInspect = conflictOperation === 'rebase' && rebaseStopUnread
+  useEffect(() => {
+    if (!shouldInspect || !activeWorktreeId || !worktreePath) {
+      return
+    }
+    void inspectRebaseStop(
+      {
+        target: requireGitOwnerTarget(activeRepoTarget),
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: sourceControlConnectionId(scope, activeWorktreeId)
+      },
+      operationStore
+    )
+  }, [activeRepoTarget, activeWorktreeId, operationStore, scope, shouldInspect, worktreePath])
+
+  const handleContinueRebase = useCallback(async (): Promise<void> => {
+    const state = operationStore.getState()
+    if (
+      !activeWorktreeId ||
+      !worktreePath ||
+      conflictOperation !== 'rebase' ||
+      state.isAbortingOperation ||
+      !state.rebaseStop ||
+      state.rebaseStop.continueBlocked
+    ) {
+      return
+    }
+    // isAbortingOperation is the shared conflict-operation lock that Abort and the busy gates read.
+    operationStore.setState({
+      isAbortingOperation: true,
+      isContinuingRebase: true,
+      remoteActionError: null
+    })
+    await runContinueRequest({
+      context: {
+        target: requireGitOwnerTarget(activeRepoTarget),
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId: sourceControlConnectionId(scope, activeWorktreeId)
+      },
       operationStore,
-      refreshActiveGitStatusAfterMutation,
-      refreshBranchCompareRef,
-      refreshGitHistoryRef,
-      worktreePath
-    ]
-  )
-  const handleContinueRebase = useCallback(() => runRebaseStep('continue'), [runRebaseStep])
-  const handleSkipRebaseCommit = useCallback(() => runRebaseStep('skip'), [runRebaseStep])
-  return { handleContinueRebase, handleSkipRebaseCommit }
+      refresh: () =>
+        refreshSourceControlAfterRemoteAction({
+          worktreeId: activeWorktreeId,
+          refreshGitStatus: refreshActiveGitStatusAfterMutation,
+          refreshBranchCompare: refreshBranchCompareRef.current,
+          refreshGitHistory: refreshGitHistoryRef.current
+        })
+    })
+  }, [
+    scope,
+    activeRepoTarget,
+    activeWorktreeId,
+    conflictOperation,
+    operationStore,
+    refreshActiveGitStatusAfterMutation,
+    refreshBranchCompareRef,
+    refreshGitHistoryRef,
+    worktreePath
+  ])
+  return { handleContinueRebase }
 }
+
 export type SourceControlRebaseContinue = ReturnType<typeof useSourceControlRebaseContinue>

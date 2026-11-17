@@ -10,7 +10,7 @@ import type {
 } from '../../../shared/git/remotes/git-fork-sync'
 import type {
   ContinueRebaseAction,
-  ContinueRebaseExpectedStop,
+  RebaseStopToken,
   ContinueRebaseResult,
   GitStagingArea,
   RebaseFromBaseResult,
@@ -94,7 +94,7 @@ export const gitApi = {
     worktreePath: string
     connectionId?: string
     action?: ContinueRebaseAction
-    expected?: ContinueRebaseExpectedStop
+    expected?: RebaseStopToken
   }): Promise<ContinueRebaseResult> => ipcRenderer.invoke('git:continueRebase', args),
   rebaseAutoStash: (args: { worktreePath: string; connectionId?: string }): Promise<boolean> =>
     ipcRenderer.invoke('git:rebaseAutoStash', args),

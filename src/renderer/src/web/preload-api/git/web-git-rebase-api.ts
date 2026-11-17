@@ -1,8 +1,8 @@
-import type { ContinueRebaseResult } from '../../../../shared/git/status/git-status-types'
-import type { PreloadApi } from '../../../../preload/api-types'
-import { callRuntimeResult } from './web-runtime-calls'
-import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
-import { resolveRuntimeWorktreeByPath } from './web-runtime-worktree-catalog'
+import type { ContinueRebaseResult } from '../../../../../shared/git/status/git-status-types'
+import type { PreloadApi } from '../../../../../preload/api-types'
+import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
+import { toRuntimeWorktreeSelector } from '../../../runtime/rpc/targets/runtime-worktree-selector'
+import { resolveRuntimeWorktreeByPath } from '../workspaces/web-runtime-worktree-catalog'
 
 export function createWebGitRebaseApi(): Pick<
   PreloadApi['git'],
@@ -20,7 +20,7 @@ export function createWebGitRebaseApi(): Pick<
       return callRuntimeResult<ContinueRebaseResult>('git.continueRebase', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         action,
-        ...(expected ? { expectedHead: expected.head, expectedStep: expected.step } : {})
+        ...(expected ? { expected } : {})
       })
     },
     rebaseAutoStash: async ({ worktreePath }) => {

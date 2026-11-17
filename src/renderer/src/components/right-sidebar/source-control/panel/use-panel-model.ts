@@ -63,7 +63,7 @@ export function useSourceControlPanelModel() {
     openCommittedDiff,
     refreshActiveGitStatusAfterMutation,
     remoteStatus,
-    rebaseEmptyStop,
+    rebaseStop,
     activeGitStatusHead,
     rebaseAutoStash,
     remoteStatusForActions,
@@ -85,7 +85,6 @@ export function useSourceControlPanelModel() {
     handleAbortRebase,
     handleCommit,
     handleContinueRebase,
-    handleSkipRebaseCommit,
     runCompoundCommitAction,
     runRemoteAction
   } = commitFlows
@@ -98,9 +97,8 @@ export function useSourceControlPanelModel() {
     conflictOperation,
     unresolvedConflictCount: unresolvedConflicts.length,
     hasTrackedChanges: grouped.staged.length > 0 || grouped.unstaged.length > 0,
-    hasStagedChanges: grouped.staged.length > 0,
     rebaseAutoStash,
-    rebaseEmptyStop,
+    rebaseStop,
     statusHead: activeGitStatusHead,
     isBusy:
       isCommitting ||
@@ -158,7 +156,6 @@ export function useSourceControlPanelModel() {
     handleCommit,
     handleContinueRebase,
     handleCreatePullRequest,
-    handleSkipRebaseCommit,
     handleStageAllPrimary,
     isCreatePrIntentInFlight,
     isCreatingPr,

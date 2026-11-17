@@ -9,7 +9,7 @@ import type {
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   ContinueRebaseAction,
-  ContinueRebaseExpectedStop,
+  RebaseStopToken,
   ContinueRebaseResult,
   RebaseFromBaseResult
 } from '../../../shared/git/status/git-status-types'
@@ -29,7 +29,7 @@ export type GitOperationApi = {
     worktreePath: string
     connectionId?: string
     action?: ContinueRebaseAction
-    expected?: ContinueRebaseExpectedStop
+    expected?: RebaseStopToken
   }) => Promise<ContinueRebaseResult>
   rebaseAutoStash: (args: { worktreePath: string; connectionId?: string }) => Promise<boolean>
   fetch: (args: {

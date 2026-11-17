@@ -13889,16 +13889,12 @@
             "rebaseContinue": "Continuer",
             "continueRebasePausedAgain": "Rebase en pause au conflit suivant",
             "continueRebaseFailed": "Échec de la poursuite du rebase",
-            "rebaseSkip": "Ignorer",
-            "rebaseEmptyCommitLabel": "commit vide",
-            "skipRebaseCommitFailed": "Impossible d’ignorer le commit",
             "rebaseAutostashConflict": "Rebase effectué. Vos modifications non commitées n’ont pas pu être réappliquées proprement ; elles sont conservées dans le stash.",
-            "rebaseEmptyCommit": "Il n’y a plus rien à commiter ici. Ignorez ce commit ou annulez le rebase.",
             "rebaseStoppedByGit": "Git a mis le rebase en pause",
             "continueRebaseUnconfirmed": "Impossible de confirmer le résultat. Le contrôle de source a été actualisé pour afficher l’état actuel.",
             "noRebaseInProgress": "Aucun rebase en cours",
-            "skipNeedsCleanTree": "Commitez, remisez ou abandonnez vos modifications avant d’ignorer.",
-            "skipStopMovedOn": "Le rebase a déjà avancé. Vérifiez le panneau et réessayez."
+            "rebaseStopMovedOn": "Le rebase a déjà avancé. Vérifiez le panneau et réessayez.",
+            "rebaseEmptyStep": "Rien à commiter à cette étape. Annulez le rebase ou terminez-le dans un terminal."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -14426,9 +14422,7 @@
                   "rebaseOntoNamedBase": "Rebaser sur {{base}}",
                   "rebaseCommitOrStashFirst": "Commitez ou remisez d’abord les modifications",
                   "continueRebase": "Continuer le rebase",
-                  "titleContinueRebase": "Continuer le rebase en pause",
-                  "skipRebaseCommit": "Ignorer le commit",
-                  "titleSkipRebaseCommit": "Abandonner ce commit désormais vide et continuer le rebase"
+                  "titleContinueRebase": "Continuer le rebase en pause"
                 }
               },
               "primary": {

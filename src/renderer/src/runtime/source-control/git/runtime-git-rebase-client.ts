@@ -1,6 +1,6 @@
 import type {
   ContinueRebaseAction,
-  ContinueRebaseExpectedStop,
+  RebaseStopToken,
   ContinueRebaseResult
 } from '../../../../../shared/git/status/git-status-types'
 import { translate } from '@/i18n/i18n'
@@ -12,7 +12,7 @@ import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-
 export async function continueRuntimeGitRebase(
   context: RuntimeGitContext,
   action: ContinueRebaseAction,
-  expected?: ContinueRebaseExpectedStop
+  expected?: RebaseStopToken
 ): Promise<ContinueRebaseResult> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
@@ -30,7 +30,7 @@ export async function continueRuntimeGitRebase(
       {
         worktree: toRuntimeWorktreeSelector(context.worktreeId),
         action,
-        ...(expected ? { expectedHead: expected.head, expectedStep: expected.step } : {})
+        ...(expected ? { expected } : {})
       },
       // Each step can run hooks and rewrite many commits; a timeout leaves the outcome unknown.
       { timeoutMs: 120_000 }

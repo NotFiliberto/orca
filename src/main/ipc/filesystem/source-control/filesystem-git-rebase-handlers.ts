@@ -1,18 +1,16 @@
 import { ipcMain } from 'electron'
 import type {
   ContinueRebaseAction,
-  ContinueRebaseExpectedStop,
+  RebaseStopToken,
   ContinueRebaseResult
-} from '../../../shared/git/status/git-status-types'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
-import {
-  continueRebase,
-  readRebaseAutoStash
-} from '../../git/source-control/mutations/git-conflict-operation'
-import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
-import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
-import type { FilesystemHandlerContext } from './filesystem-handler-context'
+} from '../../../../shared/git/status/git-status-types'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { readRebaseAutoStash } from '../../../git/source-control/mutations/git-conflict-operation'
+import { continueRebase } from '../../../git/source-control/mutations/rebase-continue'
+import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
+import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
+import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 
 export function registerFilesystemGitRebaseHandlers({ store }: FilesystemHandlerContext): void {
@@ -24,7 +22,7 @@ export function registerFilesystemGitRebaseHandlers({ store }: FilesystemHandler
         worktreePath: string
         connectionId?: string
         action?: ContinueRebaseAction
-        expected?: ContinueRebaseExpectedStop
+        expected?: RebaseStopToken
       }
     ): Promise<ContinueRebaseResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
@@ -34,7 +32,7 @@ export function registerFilesystemGitRebaseHandlers({ store }: FilesystemHandler
         args.worktreePath,
         worktreePath
       )
-      return continueRebase(worktreePath, args.action === 'skip' ? 'skip' : 'continue', {
+      return continueRebase(worktreePath, args.action === 'inspect' ? 'inspect' : 'continue', {
         ...gitOptions,
         admissionTier: 'interactive',
         expected: args.expected

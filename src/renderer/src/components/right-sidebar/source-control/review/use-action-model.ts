@@ -72,7 +72,7 @@ export function useSourceControlActionModel({
   effectiveBaseRef: string | null
   rebaseMenu: Pick<
     SourceControlRebaseModel,
-    'rebaseBehindCount' | 'rebaseBlockedByDirtyTree' | 'rebaseEmptyStop'
+    'rebaseBehindCount' | 'rebaseBlockedByDirtyTree' | 'rebaseContinueState'
   >
   suppressPullAfterRebase: boolean
 }) {
@@ -224,7 +224,7 @@ export function useSourceControlActionModel({
       ? createPrHeaderAction
       : null
   const visibleCreatePrHeaderAction = resolveVisibleCreatePrHeaderAction({ createPrHeaderAction })
-  const { rebaseBehindCount, rebaseBlockedByDirtyTree, rebaseEmptyStop } = rebaseMenu
+  const { rebaseBehindCount, rebaseBlockedByDirtyTree, rebaseContinueState } = rebaseMenu
   const dropdownItems = useMemo(
     () =>
       resolveDropdownItems({
@@ -250,13 +250,13 @@ export function useSourceControlActionModel({
         rebaseBaseRef: effectiveBaseRef,
         rebaseBehindCount,
         rebaseBlockedByDirtyTree,
-        rebaseEmptyStop,
+        rebaseContinueReady: rebaseContinueState === 'ready',
         suppressPullAfterRebase,
         primaryActionKind: primaryAction.disabled ? undefined : primaryAction.kind
       }),
     [
       rebaseBehindCount,
-      rebaseEmptyStop,
+      rebaseContinueState,
       rebaseBlockedByDirtyTree,
       suppressPullAfterRebase,
       primaryAction.disabled,

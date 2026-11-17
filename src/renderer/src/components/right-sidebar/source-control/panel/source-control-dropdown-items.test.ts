@@ -1,155 +1,173 @@
 import { describe, expect, it } from 'vitest'
-import type { DropdownActionInputs } from '../../../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
-import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type {
+  DropdownActionInputs,
+  DropdownActionKind
+} from '../../../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
 import { resolveDropdownItems } from './source-control-dropdown-items'
+import { CHANGED_STATES, STATES } from './source-control-dropdown-items.test-fixture'
 
-const CAN_CREATE_PR: HostedReviewCreationEligibility = {
-  provider: 'github',
-  review: null,
-  canCreate: true,
-  blockedReason: null,
-  nextAction: null,
-  reviewLookupOutcome: 'not_found'
+// Actions main's menu enabled in each state (read from main's unchanged row builders).
+const MAIN_ENABLED: Record<string, DropdownActionKind[]> = {
+  behindBase: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
+  upToDateWithBase: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
+  staged: [
+    'commit',
+    'commit_push',
+    'commit_sync',
+    'push',
+    'force_push',
+    'pull',
+    'fast_forward',
+    'sync',
+    'rebase_base',
+    'fetch'
+  ],
+  stagedWithoutMessage: [
+    'push',
+    'force_push',
+    'pull',
+    'fast_forward',
+    'sync',
+    'rebase_base',
+    'fetch'
+  ],
+  dirty: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
+  ahead: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
+  behindUpstream: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
+  diverged: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
+  justRebased: ['push', 'force_push', 'pull', 'fast_forward', 'rebase_base', 'fetch'],
+  unpublished: ['push', 'force_push', 'rebase_base', 'fetch', 'publish'],
+  pushedNoPr: [
+    'push',
+    'force_push',
+    'pull',
+    'fast_forward',
+    'sync',
+    'rebase_base',
+    'fetch',
+    'create_pr'
+  ],
+  aheadNoPr: [
+    'push',
+    'force_push',
+    'pull',
+    'fast_forward',
+    'sync',
+    'rebase_base',
+    'fetch',
+    'create_pr',
+    'push_create_pr'
+  ],
+  mergeConflict: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
+  rebaseConflict: ['rebase_base', 'fetch'],
+  busy: []
 }
 
-// Published branch with an open PR, clean tree, nothing to push or pull, 299 behind origin/main.
-function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionInputs {
-  return {
-    stagedCount: 0,
-    hasUnstagedChanges: false,
-    hasStageableChanges: false,
-    hasPartiallyStagedChanges: false,
-    hasMessage: false,
-    hasUnresolvedConflicts: false,
-    isCommitting: false,
-    isRemoteOperationActive: false,
-    upstreamStatus: { hasUpstream: true, upstreamName: 'origin/feature', ahead: 0, behind: 0 },
-    prState: 'open',
-    hostedReviewCreation: null,
-    branchCommitsAhead: 4,
-    rebaseBaseRef: 'origin/main',
-    rebaseBehindCount: 299,
-    primaryActionKind: undefined,
-    ...overrides
-  }
-}
-
-function rows(overrides: Partial<DropdownActionInputs> = {}) {
-  return resolveDropdownItems(inputs(overrides)).map((entry) =>
+function menuRows(inputs: DropdownActionInputs): string[] {
+  return resolveDropdownItems(inputs).map((entry) =>
     entry.kind === 'separator' ? '---' : `${entry.kind}${entry.status ? ` ${entry.status}` : ''}`
   )
 }
 
-describe('resolveDropdownItems lists only actions that can run now', () => {
-  it('puts Rebase first with its behind count when the branch is behind its base', () => {
-    expect(rows()).toEqual(['rebase_base ↓299', '---', 'force_push', 'fetch'])
-  })
+/** The menu's enabled rows plus the action the primary button runs. */
+function reachable(inputs: DropdownActionInputs): string[] {
+  const kinds = new Set<string>()
+  for (const entry of resolveDropdownItems(inputs)) {
+    if (entry.kind !== 'separator' && !entry.disabled) {
+      kinds.add(entry.kind)
+    }
+  }
+  const primary = inputs.primaryActionKind
+  const forced = inputs.upstreamStatus?.behindCommitsArePatchEquivalent === true
+  if (primary === 'push') {
+    kinds.add(forced ? 'force_push' : 'push')
+  } else if (primary === 'create_pr_intent') {
+    kinds.add('push_create_pr')
+  } else if (primary && primary !== 'stage') {
+    kinds.add(primary)
+  }
+  return [...kinds]
+}
 
-  it('leads with the commit compounds when staged, without repeating the Commit primary', () => {
-    expect(rows({ stagedCount: 3, hasMessage: true, primaryActionKind: 'commit' })).toEqual([
-      'commit_push',
-      'commit_sync',
+describe('resolveDropdownItems keeps every action main enables reachable', () => {
+  it.each(Object.keys(MAIN_ENABLED))('%s', (name) => {
+    const inputs = STATES[name]
+    // A paused rebase lists Abort/Continue instead of Rebase; the commit area is hidden then anyway.
+    const exempt = inputs.conflictOperation === 'rebase' ? ['rebase_base'] : []
+    expect(reachable(inputs)).toEqual(
+      expect.arrayContaining(MAIN_ENABLED[name].filter((kind) => !exempt.includes(kind)))
+    )
+    // No greyed rows: only Fetch may be listed disabled, as the menu's always-present refresh.
+    expect(
+      resolveDropdownItems(inputs).filter(
+        (entry) => entry.kind !== 'separator' && entry.disabled && entry.kind !== 'fetch'
+      )
+    ).toEqual([])
+  })
+})
+
+describe('resolveDropdownItems order and labels', () => {
+  it('leads with Rebase and its behind count when the branch is behind its base', () => {
+    expect(menuRows(STATES.behindBase)).toEqual([
       'rebase_base ↓299',
+      'push',
+      'pull',
+      'sync',
+      'fast_forward',
       '---',
       'force_push',
       'fetch'
     ])
   })
 
-  it('keeps only the fallbacks when the branch is up to date with its base', () => {
-    expect(rows({ rebaseBehindCount: 0 })).toEqual(['force_push', 'fetch'])
+  it('keeps Commit & Push / Sync but not the Commit the primary already runs', () => {
+    expect(menuRows(STATES.staged)).toEqual([
+      'commit_push',
+      'commit_sync',
+      'rebase_base ↓299',
+      'push',
+      'pull',
+      'sync',
+      'fast_forward',
+      '---',
+      'force_push',
+      'fetch'
+    ])
   })
 
-  it('keeps Rebase without a count when the compare row measures another ref', () => {
-    expect(rows({ rebaseBehindCount: null })).toEqual(['rebase_base', '---', 'force_push', 'fetch'])
+  it('drops the Push, Force Push or Create PR row that the primary button runs', () => {
+    expect(menuRows(STATES.ahead).some((row) => row.startsWith('push'))).toBe(false)
+    expect(menuRows(STATES.justRebased).some((row) => row.startsWith('force_push'))).toBe(false)
+    expect(menuRows(STATES.pushedNoPr)).not.toContain('create_pr')
   })
 
-  it('drops Push and Create PR when they are the primary', () => {
-    expect(
-      rows({
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-        primaryActionKind: 'push',
-        rebaseBehindCount: 0
-      })
-    ).toEqual(['force_push ↑2', 'fetch'])
-    expect(
-      rows({
-        prState: null,
-        hostedReviewCreation: CAN_CREATE_PR,
-        primaryActionKind: 'create_pr',
-        rebaseBehindCount: 0
-      })
-    ).toEqual(['force_push', 'fetch'])
+  it('keeps merge-conflict Abort as on main', () => {
+    expect(menuRows(STATES.mergeConflict).at(-1)).toBe('abort_merge')
+  })
+})
+
+describe('resolveDropdownItems owner-approved differences from main', () => {
+  it('hides Rebase while tracked edits would make Git refuse it', () => {
+    expect(menuRows(CHANGED_STATES.dirtyWithoutAutoStash)).not.toContain('rebase_base ↓299')
+    expect(menuRows(STATES.dirty)).toContain('rebase_base ↓299')
   })
 
-  it('offers Create PR in the menu when the primary is busy with something else', () => {
-    expect(
-      rows({ prState: null, hostedReviewCreation: CAN_CREATE_PR, rebaseBehindCount: 0 })
-    ).toEqual(['create_pr', '---', 'force_push', 'fetch'])
-  })
-
-  it('hides Rebase while tracked changes would make git refuse it', () => {
-    expect(
-      rows({
-        hasUnstagedChanges: true,
-        hasStageableChanges: true,
-        rebaseBlockedByDirtyTree: true,
-        primaryActionKind: 'stage'
-      })
-    ).toEqual(['force_push', 'fetch'])
-  })
-
-  it('offers neither Pull, Sync nor a plain Push right after a rebase', () => {
-    expect(
-      rows({
-        upstreamStatus: {
-          hasUpstream: true,
-          ahead: 303,
-          behind: 4,
-          behindCommitsArePatchEquivalent: true
-        },
-        primaryActionKind: 'push',
-        rebaseBehindCount: 0
-      })
-    ).toEqual(['fetch'])
-  })
-
-  it('hides Pull, Sync and Fast-forward after an Orca rebase but keeps Force Push', () => {
-    const diverged = { hasUpstream: true, ahead: 3, behind: 2 }
-    expect(rows({ upstreamStatus: diverged, rebaseBehindCount: 0 })).toEqual([
-      'push ↑3',
-      'pull ↓2',
-      'sync ↓2 ↑3',
-      'fast_forward May fail',
+  it('hides Pull, Sync, Fast-forward and Push after Orca rebased, keeping Force Push', () => {
+    expect(menuRows(CHANGED_STATES.orcaRebased)).toEqual([
+      'rebase_base',
       '---',
       'force_push Replaces ↓2',
       'fetch'
     ])
-    expect(
-      rows({ upstreamStatus: diverged, rebaseBehindCount: 0, suppressPullAfterRebase: true })
-    ).toEqual(['push ↑3', '---', 'force_push Replaces ↓2', 'fetch'])
   })
 
   it('limits a paused rebase to Abort, Continue once resolved, and Fetch', () => {
-    const paused = { conflictOperation: 'rebase' as const, upstreamStatus: undefined }
-    expect(rows({ ...paused, hasUnresolvedConflicts: true })).toEqual([
+    expect(menuRows(STATES.rebaseConflict)).toEqual(['abort_rebase', '---', 'fetch'])
+    expect(menuRows(CHANGED_STATES.rebaseResolved)).toEqual([
       'abort_rebase',
+      'continue_rebase',
       '---',
       'fetch'
     ])
-    expect(rows(paused)).toEqual(['abort_rebase', 'continue_rebase', '---', 'fetch'])
-    expect(rows({ ...paused, rebaseEmptyStop: true })).toEqual([
-      'skip_rebase_commit',
-      'abort_rebase',
-      '---',
-      'fetch'
-    ])
-  })
-
-  it('keeps a disabled Fetch as the only row while another Git operation runs', () => {
-    const entries = resolveDropdownItems(
-      inputs({ isRemoteOperationActive: true, inFlightRemoteOpKind: 'rebase' })
-    )
-    expect(entries).toMatchObject([{ kind: 'fetch', disabled: true }])
   })
 })

@@ -14071,18 +14071,14 @@
             "rebaseResolveConflictsFirst": "先に競合を解決してください",
             "rebaseAbort": "中止",
             "rebaseContinue": "続行",
-            "rebaseSkip": "スキップ",
-            "rebaseEmptyCommitLabel": "空のコミット",
             "continueRebasePausedAgain": "次の競合でリベースを一時停止しました",
             "continueRebaseFailed": "リベースの続行に失敗しました",
-            "skipRebaseCommitFailed": "コミットのスキップに失敗しました",
             "rebaseAutostashConflict": "リベースしました。未コミットの変更はきれいに再適用できず、stash に保存されています。",
-            "rebaseEmptyCommit": "ここにはコミットする内容がありません。このコミットをスキップするか、リベースを中止してください。",
             "rebaseStoppedByGit": "Git がリベースを一時停止しました",
             "continueRebaseUnconfirmed": "結果を確認できませんでした。ソース管理を更新して現在の状態を表示しました。",
             "noRebaseInProgress": "進行中のリベースはありません",
-            "skipNeedsCleanTree": "スキップする前に、編集をコミット、スタッシュ、または破棄してください。",
-            "skipStopMovedOn": "リベースはすでに先へ進んでいます。パネルを確認してもう一度お試しください。"
+            "rebaseStopMovedOn": "リベースはすでに先へ進んでいます。パネルを確認してもう一度お試しください。",
+            "rebaseEmptyStep": "このステップにはコミットする内容がありません。リベースを中止するか、ターミナルで完了してください。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -14609,9 +14605,7 @@
                   "rebaseOntoNamedBase": "{{base}} にリベース",
                   "rebaseCommitOrStashFirst": "先に変更をコミットまたはスタッシュしてください",
                   "continueRebase": "リベースを続行",
-                  "titleContinueRebase": "一時停止中のリベースを続行",
-                  "skipRebaseCommit": "コミットをスキップ",
-                  "titleSkipRebaseCommit": "空になったこのコミットを破棄してリベースを続行"
+                  "titleContinueRebase": "一時停止中のリベースを続行"
                 }
               },
               "primary": {

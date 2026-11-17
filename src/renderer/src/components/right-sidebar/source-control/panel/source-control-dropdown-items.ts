@@ -193,9 +193,13 @@ function primaryDropdownKind(
   }
 }
 
-// Force Push and Fetch are deliberate escape hatches, so idle counts do not hide them.
-const ALWAYS_LISTED_WHEN_ENABLED = new Set<DropdownActionKind>(['force_push', 'fetch'])
-const PULL_KINDS = new Set<DropdownActionKind>(['pull', 'sync', 'fast_forward'])
+// After an Orca rebase: pulling merges the old copies back and a plain push is rejected.
+const HIDDEN_AFTER_ORCA_REBASE = new Set<DropdownActionKind>([
+  'pull',
+  'sync',
+  'fast_forward',
+  'push'
+])
 
 /** List only actions that can run right now, minus the primary; Fetch always stays as the refresh path. */
 export function resolveDropdownItems(
@@ -223,55 +227,38 @@ export function resolveDropdownItems(
 
   if (conflictOperation === 'rebase') {
     // Push, Sync and Force Push during a paused rebase would publish a half-applied branch.
-    const rebaseEntries: DropdownItem[] = []
-    if (inputs.rebaseEmptyStop && !globalBusy) {
+    // (The commit area, and so this menu, is hidden on main while a rebase is paused.)
+    const rebaseEntries: DropdownItem[] = globalBusy
+      ? []
+      : [abortConflictItem('rebase', globalBusy, t)]
+    // Continue only once this stop has been read and Git can continue it.
+    if (inputs.rebaseContinueReady && !inputs.hasUnresolvedConflicts && !globalBusy) {
       rebaseEntries.push({
-        kind: 'skip_rebase_commit',
+        kind: 'continue_rebase',
         label: t(
-          'auto.components.right.sidebar.source.control.dropdown.items.skipRebaseCommit',
-          'Skip commit'
+          'auto.components.right.sidebar.source.control.dropdown.items.continueRebase',
+          'Continue rebase'
         ),
         title: t(
-          'auto.components.right.sidebar.source.control.dropdown.items.titleSkipRebaseCommit',
-          'Drop this now-empty commit and continue the rebase'
+          'auto.components.right.sidebar.source.control.dropdown.items.titleContinueRebase',
+          'Continue the paused rebase'
         ),
         disabled: false
       })
-      rebaseEntries.push(abortConflictItem('rebase', globalBusy, t))
-    } else {
-      rebaseEntries.push(abortConflictItem('rebase', globalBusy, t))
-      if (!inputs.hasUnresolvedConflicts && !globalBusy) {
-        rebaseEntries.push({
-          kind: 'continue_rebase',
-          label: t(
-            'auto.components.right.sidebar.source.control.dropdown.items.continueRebase',
-            'Continue rebase'
-          ),
-          title: t(
-            'auto.components.right.sidebar.source.control.dropdown.items.titleContinueRebase',
-            'Continue the paused rebase'
-          ),
-          disabled: false
-        })
-      }
     }
     return [...rebaseEntries, { kind: 'separator', id: 'before-fetch' }, lockedFetch]
   }
 
+  // Every action main enables stays reachable: only disabled rows, the primary's own row, and
+  // (after Orca's rebase over an integrated upstream) Pull/Sync/FF/Push leave the menu.
   const isRunnable = (item: DropdownItem): boolean =>
     !isPullRequestOperationActive &&
     !item.disabled &&
     item.kind !== hiddenPrimaryKind &&
-    // After a rebase the remote holds old copies, so a regular push can only be rejected.
-    !(item.kind === 'push' && shouldForcePushWithLease) &&
-    // After an Orca rebase these would merge the remote's old copies back in.
-    !(inputs.suppressPullAfterRebase && PULL_KINDS.has(item.kind)) &&
-    // One-way Sync is just Push or Pull, which have their own rows.
-    !(item.kind === 'sync' && (ctx.ahead === 0 || ctx.behind === 0)) &&
-    (!item.idle || ALWAYS_LISTED_WHEN_ENABLED.has(item.kind))
-  // Counts and warnings stay; reason hints only described rows that are now hidden.
+    !(inputs.suppressPullAfterRebase && HIDDEN_AFTER_ORCA_REBASE.has(item.kind))
+  // Counts and warnings stay; plain notes like "Up to date" only explained a row's state.
   const withoutReasonHint = (item: DropdownItem): DropdownItem =>
-    item.statusTone ? item : { ...item, status: undefined, idle: undefined }
+    item.statusTone ? item : { ...item, status: undefined }
 
   const primaryRows = [
     commit,
@@ -283,8 +270,7 @@ export function resolveDropdownItems(
     sync,
     fastForward,
     publish,
-    // Blocked-but-clickable Create PR only explains a blocker; the menu lists runnable work.
-    ...(ctx.hostedReviewCreation?.canCreate ? [createPR] : []),
+    createPR,
     pushCreatePR
   ]
     .filter(isRunnable)
@@ -293,7 +279,7 @@ export function resolveDropdownItems(
     ...[forcePush].filter(isRunnable).map(withoutReasonHint),
     lockedFetch
   ]
-  if (conflictOperation === 'merge') {
+  if (conflictOperation === 'merge' && !globalBusy) {
     trailingRows.push(abortConflictItem('merge', globalBusy, t))
   }
   return primaryRows.length > 0

@@ -14126,16 +14126,12 @@
             "rebaseContinue": "继续",
             "continueRebasePausedAgain": "变基在下一个冲突处暂停",
             "continueRebaseFailed": "继续变基失败",
-            "rebaseSkip": "跳过",
-            "rebaseEmptyCommitLabel": "空提交",
-            "skipRebaseCommitFailed": "跳过提交失败",
             "rebaseAutostashConflict": "已变基。你的未提交更改未能干净地重新应用，已保存在 stash 中。",
-            "rebaseEmptyCommit": "这里已没有可提交的内容。跳过此提交或中止变基。",
             "rebaseStoppedByGit": "Git 暂停了变基",
             "continueRebaseUnconfirmed": "无法确认结果。源代码管理已刷新以显示当前状态。",
             "noRebaseInProgress": "没有正在进行的变基",
-            "skipNeedsCleanTree": "跳过前请先提交、暂存或丢弃你的修改。",
-            "skipStopMovedOn": "变基已经继续进行。请查看面板后重试。"
+            "rebaseStopMovedOn": "变基已经继续进行。请查看面板后重试。",
+            "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",
@@ -14662,9 +14658,7 @@
                   "rebaseOntoNamedBase": "变基到 {{base}}",
                   "rebaseCommitOrStashFirst": "请先提交或暂存更改",
                   "continueRebase": "继续变基",
-                  "titleContinueRebase": "继续已暂停的变基",
-                  "skipRebaseCommit": "跳过提交",
-                  "titleSkipRebaseCommit": "丢弃这个已变为空的提交并继续变基"
+                  "titleContinueRebase": "继续已暂停的变基"
                 }
               },
               "primary": {

@@ -14,6 +14,7 @@ import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import { refreshSourceControlAfterRemoteAction, resolveRemoteActionError } from './remote-refresh'
+import { orcaRebaseMarkerFromResult } from './orca-rebase-marker'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
 
 export type SourceControlRemoteActionKind =
@@ -78,7 +79,6 @@ export function useSourceControlRemoteActionRunner({
   worktreePath: string | null
 }) {
   const scope = useSourceControlScope()
-  const upstreamName = remoteStatus?.upstreamName ?? null
   const runRemoteAction = useCallback(
     async (
       kind: SourceControlRemoteActionKind,
@@ -115,10 +115,8 @@ export function useSourceControlRemoteActionRunner({
       )
       const failureBranchName = targetIsActiveWorktree ? branchName || null : null
       // Any push or pull reconciles with the remote, so the post-rebase Pull hiding retires.
-      const settleOrcaRebaseMarker = (): void => {
-        if (targetIsActiveWorktree && kind !== 'fetch' && kind !== 'rebase') {
-          operationStore.setState({ orcaRebase: null })
-        }
+      if (targetIsActiveWorktree && kind !== 'fetch') {
+        operationStore.setState({ orcaRebase: null })
       }
       try {
         if (kind === 'publish') {
@@ -130,7 +128,6 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTarget: target.target }
           )
-          settleOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'push') {
@@ -143,7 +140,6 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTarget: target.target }
           )
-          settleOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'force_push') {
@@ -155,7 +151,6 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { forceWithLease: true, runtimeTarget: target.target }
           )
-          settleOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'pull') {
@@ -168,7 +163,6 @@ export function useSourceControlRemoteActionRunner({
               runtimeTarget: target.target
             }
           )
-          settleOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'fast_forward') {
@@ -179,7 +173,6 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTarget: target.target }
           )
-          settleOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'fetch') {
@@ -192,7 +185,6 @@ export function useSourceControlRemoteActionRunner({
               runtimeTarget: target.target
             }
           )
-          settleOrcaRebaseMarker()
           return { status: 'ok' }
         }
         if (kind === 'rebase') {
@@ -200,13 +192,7 @@ export function useSourceControlRemoteActionRunner({
           if (!baseRef) {
             return { status: 'skipped' }
           }
-          // Only a rebase Orca starts can later hide Pull; capture what it rebases now.
-          const marker =
-            targetIsActiveWorktree && branchName
-              ? { branch: branchName, upstream: upstreamName }
-              : null
-          operationStore.setState({ orcaRebase: marker ? { ...marker, state: 'paused' } : null })
-          await rebaseFromBase(
+          const result = await rebaseFromBase(
             target.worktreeId,
             target.worktreePath,
             baseRef,
@@ -214,9 +200,12 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTarget: target.target }
           )
-          if (marker) {
-            operationStore.setState({ orcaRebase: { ...marker, state: 'done' } })
-          }
+          // Main reports the upstream tip only when this rebase integrated it, so only then hide Pull.
+          operationStore.setState({
+            orcaRebase: targetIsActiveWorktree
+              ? orcaRebaseMarkerFromResult(branchName, result)
+              : null
+          })
           return { status: 'ok' }
         }
         await syncBranch(
@@ -231,7 +220,6 @@ export function useSourceControlRemoteActionRunner({
         if (operationStore.getState().remoteActionSequence === sequence) {
           operationStore.setState({ remoteActionError: null })
         }
-        settleOrcaRebaseMarker()
         return { status: 'ok' }
       } catch (error) {
         // Keep failures inline after dropdowns close; store actions already own the toast.
@@ -278,7 +266,6 @@ export function useSourceControlRemoteActionRunner({
       pullBranch,
       pushBranch,
       rebaseFromBase,
-      upstreamName,
       refreshActiveGitStatusAfterMutation,
       refreshBranchCompareRef,
       refreshGitHistoryRef,

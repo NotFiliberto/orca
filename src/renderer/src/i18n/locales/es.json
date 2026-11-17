@@ -13618,16 +13618,12 @@
             "rebaseContinue": "Continuar",
             "continueRebasePausedAgain": "Rebase en pausa en el siguiente conflicto",
             "continueRebaseFailed": "Error al continuar el rebase",
-            "rebaseSkip": "Omitir",
-            "rebaseEmptyCommitLabel": "commit vacío",
-            "skipRebaseCommitFailed": "Error al omitir el commit",
             "rebaseAutostashConflict": "Rebase completado. Tus cambios sin commit no se pudieron volver a aplicar limpiamente; están guardados en el stash.",
-            "rebaseEmptyCommit": "No queda nada que confirmar aquí. Omite este commit o aborta el rebase.",
             "rebaseStoppedByGit": "Git pausó el rebase",
             "continueRebaseUnconfirmed": "No se pudo confirmar el resultado. Control de código se actualizó para mostrar el estado actual.",
             "noRebaseInProgress": "No hay ningún rebase en curso",
-            "skipNeedsCleanTree": "Haz commit, stash o descarta tus cambios antes de omitir.",
-            "skipStopMovedOn": "El rebase ya avanzó. Revisa el panel e inténtalo de nuevo."
+            "rebaseStopMovedOn": "El rebase ya avanzó. Revisa el panel e inténtalo de nuevo.",
+            "rebaseEmptyStep": "No hay nada que confirmar en este paso. Aborta el rebase o termínalo en una terminal."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -14155,9 +14151,7 @@
                   "rebaseOntoNamedBase": "Hacer rebase sobre {{base}}",
                   "rebaseCommitOrStashFirst": "Haz commit o stash de los cambios primero",
                   "continueRebase": "Continuar rebase",
-                  "titleContinueRebase": "Continuar el rebase en pausa",
-                  "skipRebaseCommit": "Omitir commit",
-                  "titleSkipRebaseCommit": "Descartar este commit ahora vacío y continuar el rebase"
+                  "titleContinueRebase": "Continuar el rebase en pausa"
                 }
               },
               "primary": {

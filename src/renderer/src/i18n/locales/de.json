@@ -13974,18 +13974,14 @@
             "rebaseResolveConflictsFirst": "Löse zuerst die Konflikte",
             "rebaseAbort": "Abbrechen",
             "rebaseContinue": "Fortsetzen",
-            "rebaseSkip": "Überspringen",
-            "rebaseEmptyCommitLabel": "leerer Commit",
             "continueRebasePausedAgain": "Rebase beim nächsten Konflikt angehalten",
             "continueRebaseFailed": "Rebase konnte nicht fortgesetzt werden",
-            "skipRebaseCommitFailed": "Commit konnte nicht übersprungen werden",
             "rebaseAutostashConflict": "Rebase abgeschlossen. Deine nicht committeten Änderungen ließen sich nicht sauber erneut anwenden; sie sind im Stash gespeichert.",
-            "rebaseEmptyCommit": "Hier gibt es nichts mehr zu committen. Überspringe diesen Commit oder brich den Rebase ab.",
             "rebaseStoppedByGit": "Git hat den Rebase angehalten",
             "continueRebaseUnconfirmed": "Das Ergebnis ließ sich nicht bestätigen. Die Quellcodeverwaltung wurde aktualisiert und zeigt den aktuellen Stand.",
             "noRebaseInProgress": "Kein Rebase in Arbeit",
-            "skipNeedsCleanTree": "Committe, stashe oder verwirf deine Änderungen, bevor du überspringst.",
-            "skipStopMovedOn": "Der Rebase ist bereits weitergegangen. Prüfe das Panel und versuche es erneut."
+            "rebaseStopMovedOn": "Der Rebase ist bereits weitergegangen. Prüfe das Panel und versuche es erneut.",
+            "rebaseEmptyStep": "In diesem Schritt gibt es nichts zu committen. Brich den Rebase ab oder schließe ihn im Terminal ab."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",
@@ -14496,9 +14492,7 @@
                   "rebaseOntoNamedBase": "Rebase auf {{base}}",
                   "rebaseCommitOrStashFirst": "Committe oder stashe zuerst die Änderungen",
                   "continueRebase": "Rebase fortsetzen",
-                  "titleContinueRebase": "Angehaltenen Rebase fortsetzen",
-                  "skipRebaseCommit": "Commit überspringen",
-                  "titleSkipRebaseCommit": "Diesen nun leeren Commit verwerfen und den Rebase fortsetzen"
+                  "titleContinueRebase": "Angehaltenen Rebase fortsetzen"
                 }
               },
               "primary": {

@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { continueRebase, detectConflictOperation } from './git-conflict-operation'
+import { detectConflictOperation } from './git-conflict-operation'
+import { continueRebase } from './rebase-continue'
 
-describe('continueRebase outcome classification against real git', () => {
+describe('continueRebase against real git', () => {
   const tempPaths: string[] = []
 
   afterEach(() => {
@@ -22,7 +23,7 @@ describe('continueRebase outcome classification against real git', () => {
       execFileSync('git', args, {
         cwd: repoPath,
         encoding: 'utf8',
-        env: { ...process.env, GIT_EDITOR: 'true' },
+        env: { ...process.env, GIT_EDITOR: 'true', GIT_CONFIG_NOSYSTEM: '1', HOME: repoPath },
         stdio: ['ignore', 'pipe', 'pipe']
       })
     const write = (file: string, text: string) => writeFileSync(join(repoPath, file), text)
@@ -50,20 +51,69 @@ describe('continueRebase outcome classification against real git', () => {
     return { repoPath, git, write }
   }
 
-  it('reports a later conflict as conflicted, then completes', async () => {
+  async function stopToken(repoPath: string) {
+    const inspected = await continueRebase(repoPath, 'inspect')
+    expect(inspected.outcome).toBe('inspected')
+    return inspected.stop
+  }
+
+  it('continues only the inspected stop, reporting a later conflict and then completion', async () => {
     const { repoPath, git, write } = createFeatureBehindConflictingMain()
     expect(() => git('rebase', 'main')).toThrow()
+    await expect(continueRebase(repoPath, 'inspect')).resolves.toMatchObject({
+      outcome: 'inspected',
+      branch: 'feature'
+    })
 
     write('a.txt', 'resolved a\n')
     git('add', 'a.txt')
-    await expect(continueRebase(repoPath)).resolves.toMatchObject({ outcome: 'conflicted' })
+    const first = await continueRebase(repoPath, 'continue', {
+      expected: await stopToken(repoPath)
+    })
+    expect(first.outcome).toBe('conflicted')
     expect(git('diff', '--name-only', '--diff-filter=U')).toBe('b.txt\n')
 
     write('b.txt', 'resolved b\n')
     git('add', 'b.txt')
-    await expect(continueRebase(repoPath)).resolves.toMatchObject({ outcome: 'completed' })
+    await expect(
+      continueRebase(repoPath, 'continue', { expected: first.stop })
+    ).resolves.toMatchObject({ outcome: 'completed', branch: 'feature' })
     await expect(detectConflictOperation(repoPath)).resolves.toBe('unknown')
     expect(git('log', '-1', '--format=%s').trim()).toBe('feature b')
+  })
+
+  it('refuses a Continue without a token or with one from an earlier stop', async () => {
+    const { repoPath, git, write } = createFeatureBehindConflictingMain()
+    expect(() => git('rebase', 'main')).toThrow()
+    const firstStop = await stopToken(repoPath)
+    await expect(continueRebase(repoPath, 'continue')).resolves.toMatchObject({ outcome: 'stale' })
+
+    write('a.txt', 'resolved a\n')
+    git('add', 'a.txt')
+    await continueRebase(repoPath, 'continue', { expected: firstStop })
+    write('b.txt', 'resolved b\n')
+    git('add', 'b.txt')
+
+    // A delayed retry of the first click must not finish the second stop.
+    await expect(
+      continueRebase(repoPath, 'continue', { expected: firstStop })
+    ).resolves.toMatchObject({ outcome: 'stale' })
+    await expect(detectConflictOperation(repoPath)).resolves.toBe('rebase')
+  })
+
+  it('refuses a token from before an identical abort and restart', async () => {
+    const { repoPath, git, write } = createFeatureBehindConflictingMain()
+    expect(() => git('rebase', 'main')).toThrow()
+    const beforeRestart = await stopToken(repoPath)
+    git('rebase', '--abort')
+    expect(() => git('rebase', 'main')).toThrow()
+    write('a.txt', 'resolved a\n')
+    git('add', 'a.txt')
+
+    await expect(
+      continueRebase(repoPath, 'continue', { expected: beforeRestart })
+    ).resolves.toMatchObject({ outcome: 'stale' })
+    expect(git('diff', '--name-only', '--cached')).toBe('a.txt\n')
   })
 
   it('keeps the rebase paused and reports git’s refusal for an unstaged resolution', async () => {
@@ -71,89 +121,25 @@ describe('continueRebase outcome classification against real git', () => {
     expect(() => git('rebase', 'main')).toThrow()
     write('a.txt', 'resolved a\n')
 
-    const result = await continueRebase(repoPath)
+    const result = await continueRebase(repoPath, 'continue', {
+      expected: await stopToken(repoPath)
+    })
     expect(result.outcome).toBe('failed')
     expect(result.message).toBeTruthy()
     await expect(detectConflictOperation(repoPath)).resolves.toBe('rebase')
   })
 
-  it('classifies an empty resolution as empty on the apply backend, and Skip moves on', async () => {
+  it('reports an empty step on the apply backend so Continue is withheld', async () => {
     const { repoPath, git } = createFeatureBehindConflictingMain()
-    // Git 2.25's default backend; it refuses to continue when the resolution changes nothing.
+    // Git 2.25's default backend refuses to continue when the resolution changes nothing.
     expect(() => git('rebase', '--apply', 'main')).toThrow()
     git('checkout', '--ours', 'a.txt')
     git('add', 'a.txt')
 
-    const empty = await continueRebase(repoPath)
-    expect(empty.outcome).toBe('empty')
+    await expect(
+      continueRebase(repoPath, 'continue', { expected: await stopToken(repoPath) })
+    ).resolves.toMatchObject({ outcome: 'empty' })
     await expect(detectConflictOperation(repoPath)).resolves.toBe('rebase')
-
-    const expected = { head: empty.head ?? null, step: empty.step ?? null }
-    await expect(continueRebase(repoPath, 'skip', { expected })).resolves.toMatchObject({
-      outcome: 'conflicted'
-    })
-  })
-
-  it('refuses Skip, keeping the edit, when the tree gained edits after the empty stop', async () => {
-    const { repoPath, git, write } = createFeatureBehindConflictingMain()
-    expect(() => git('rebase', '--apply', 'main')).toThrow()
-    git('checkout', '--ours', 'a.txt')
-    git('add', 'a.txt')
-    const empty = await continueRebase(repoPath)
-    expect(empty.outcome).toBe('empty')
-    write('c.txt', 'edited during the pause\n')
-
-    const expected = { head: empty.head ?? null, step: empty.step ?? null }
-    await expect(continueRebase(repoPath, 'skip', { expected })).resolves.toMatchObject({
-      outcome: 'skip_refused_dirty'
-    })
-    expect(git('show', ':c.txt')).toBe('main c\n')
-    expect(git('diff', '--name-only')).toBe('c.txt\n')
-    await expect(detectConflictOperation(repoPath)).resolves.toBe('rebase')
-  })
-
-  it('does not report a dirty refusal as an empty stop', async () => {
-    const { repoPath, git, write } = createFeatureBehindConflictingMain()
-    expect(() => git('rebase', '--apply', 'main')).toThrow()
-    git('checkout', '--ours', 'a.txt')
-    git('add', 'a.txt')
-    write('c.txt', 'edited during the pause\n')
-
-    await expect(continueRebase(repoPath)).resolves.not.toMatchObject({ outcome: 'empty' })
-  })
-
-  it('refuses a Skip bound to a stop the rebase already left', async () => {
-    const { repoPath, git } = createFeatureBehindConflictingMain()
-    expect(() => git('rebase', '--apply', 'main')).toThrow()
-    git('checkout', '--ours', 'a.txt')
-    git('add', 'a.txt')
-    const empty = await continueRebase(repoPath)
-    const expected = { head: empty.head ?? null, step: empty.step ?? null }
-    await continueRebase(repoPath, 'skip', { expected })
-    const stepAfterFirstSkip = git('rev-parse', 'HEAD')
-
-    // A retry of the same Skip after an unknown settlement must not drop the next commit.
-    await expect(continueRebase(repoPath, 'skip', { expected })).resolves.toMatchObject({
-      outcome: 'skip_refused_stale'
-    })
-    expect(git('rev-parse', 'HEAD')).toBe(stepAfterFirstSkip)
-    expect(git('diff', '--name-only', '--diff-filter=U')).toBe('b.txt\n')
-    await expect(continueRebase(repoPath, 'skip')).resolves.toMatchObject({
-      outcome: 'skip_refused_stale'
-    })
-  })
-
-  it('reports a repeated Continue after completion as not rebasing, not success', async () => {
-    const { repoPath, git, write } = createFeatureBehindConflictingMain()
-    expect(() => git('rebase', 'main')).toThrow()
-    write('a.txt', 'resolved a\n')
-    git('add', 'a.txt')
-    await continueRebase(repoPath)
-    write('b.txt', 'resolved b\n')
-    git('add', 'b.txt')
-    await continueRebase(repoPath)
-
-    await expect(continueRebase(repoPath)).resolves.toEqual({ outcome: 'not_rebasing' })
   })
 
   it('treats the merge backend dropping an empty pick before the next conflict as conflicted', async () => {
@@ -164,8 +150,27 @@ describe('continueRebase outcome classification against real git', () => {
     const headBefore = git('rev-parse', 'HEAD')
 
     // HEAD stays put because the empty pick is dropped; only the step counter shows progress.
-    await expect(continueRebase(repoPath)).resolves.toMatchObject({ outcome: 'conflicted' })
+    await expect(
+      continueRebase(repoPath, 'continue', { expected: await stopToken(repoPath) })
+    ).resolves.toMatchObject({ outcome: 'conflicted' })
     expect(git('rev-parse', 'HEAD')).toBe(headBefore)
+  })
+
+  it('reports a repeated Continue after completion as not rebasing, not success', async () => {
+    const { repoPath, git, write } = createFeatureBehindConflictingMain()
+    expect(() => git('rebase', 'main')).toThrow()
+    write('a.txt', 'resolved a\n')
+    git('add', 'a.txt')
+    const first = await continueRebase(repoPath, 'continue', {
+      expected: await stopToken(repoPath)
+    })
+    write('b.txt', 'resolved b\n')
+    git('add', 'b.txt')
+    await continueRebase(repoPath, 'continue', { expected: first.stop })
+
+    await expect(continueRebase(repoPath, 'continue', { expected: first.stop })).resolves.toEqual({
+      outcome: 'not_rebasing'
+    })
   })
 
   it('flags an autostash that could not reapply after the rebase completes', async () => {
@@ -174,13 +179,15 @@ describe('continueRebase outcome classification against real git', () => {
     expect(() => git('rebase', '--autostash', 'main')).toThrow()
     write('a.txt', 'resolved a\n')
     git('add', 'a.txt')
-    await continueRebase(repoPath)
+    const first = await continueRebase(repoPath, 'continue', {
+      expected: await stopToken(repoPath)
+    })
     write('b.txt', 'resolved b\n')
     git('add', 'b.txt')
 
-    await expect(continueRebase(repoPath)).resolves.toMatchObject({
-      outcome: 'completed_autostash_conflict'
-    })
+    await expect(
+      continueRebase(repoPath, 'continue', { expected: first.stop })
+    ).resolves.toMatchObject({ outcome: 'completed_autostash_conflict' })
     expect(git('stash', 'list')).toContain('autostash')
   })
 })

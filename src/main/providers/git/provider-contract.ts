@@ -13,7 +13,7 @@ import type {
 } from '../../../shared/git/remotes/git-fork-sync'
 import type {
   ContinueRebaseAction,
-  ContinueRebaseExpectedStop,
+  RebaseStopToken,
   ContinueRebaseResult,
   GitConflictOperation,
   RebaseFromBaseResult,
@@ -94,7 +94,7 @@ export type IGitProvider = {
   continueRebase(
     worktreePath: string,
     action: ContinueRebaseAction,
-    expected?: ContinueRebaseExpectedStop
+    expected?: RebaseStopToken
   ): Promise<ContinueRebaseResult>
   readRebaseAutoStash(worktreePath: string): Promise<boolean>
   /** `skippedPaths`: files git could not replace (held open on Windows) though the switch landed. */

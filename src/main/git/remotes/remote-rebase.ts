@@ -14,7 +14,15 @@ import {
 import { withLocalGitCapabilityCacheForExecution } from '../command-runner/host-routing/git-capability-state'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../source-control/git-read-cache-invalidation'
-import { AUTOSTASH_REAPPLY_CONFLICT } from '../source-control/mutations/git-conflict-operation'
+import {
+  AUTOSTASH_REAPPLY_CONFLICT,
+  detectConflictOperation
+} from '../source-control/mutations/git-conflict-operation'
+import { recordOrcaRebaseProvenance } from '../source-control/mutations/orca-rebase-provenance'
+import {
+  readRebaseStopToken,
+  readRebasingBranch
+} from '../source-control/mutations/rebase-continue'
 import type { RebaseFromBaseResult } from '../../../shared/git/status/git-status-types'
 
 export async function gitPullRebaseFromBase(
@@ -38,6 +46,7 @@ async function gitPullRebaseFromBaseUnlocked(
       terminationBarrier: true
     }
     let rebaseRef: string | null = null
+    let integratedUpstreamOid: string | null = null
     try {
       const source = await resolveGitRemoteRebaseSource(
         (args) => gitExecFileAsync(args, operationOptions),
@@ -84,6 +93,8 @@ async function gitPullRebaseFromBaseUnlocked(
             isNoWriteFetchHeadUnsupportedError
           )
       )
+      // Pull hiding is only safe when the upstream tip is already in the branch being rebased.
+      integratedUpstreamOid = hasHead ? await readIntegratedUpstreamOid(operationOptions) : null
       const { stdout, stderr } = await gitExecFileAsync(
         hasHead
           ? forkPoint
@@ -94,10 +105,13 @@ async function gitPullRebaseFromBaseUnlocked(
       )
       // rebase.autoStash can land the rebase yet leave the reapplied edits conflicted.
       return {
-        autostashConflict: AUTOSTASH_REAPPLY_CONFLICT.test(`${stdout}
-${stderr}`)
+        autostashConflict: AUTOSTASH_REAPPLY_CONFLICT.test(`${stdout}\n${stderr}`),
+        ...(integratedUpstreamOid ? { integratedUpstreamOid } : {})
       }
     } catch (error) {
+      if (integratedUpstreamOid) {
+        await rememberPausedOrcaRebase(worktreePath, integratedUpstreamOid, options)
+      }
       throw new Error(normalizeGitErrorMessage(error, 'pull'), { cause: error })
     } finally {
       if (rebaseRef) {
@@ -113,4 +127,45 @@ ${stderr}`)
       }
     }
   })
+}
+
+/** The upstream tip, only when it is an ancestor of HEAD (no unintegrated collaborator commits). */
+async function readIntegratedUpstreamOid(
+  options: Parameters<typeof gitExecFileAsync>[1]
+): Promise<string | null> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['rev-parse', '-q', '--verify', '@{upstream}'],
+      options
+    )
+    const upstreamOid = stdout.trim()
+    if (!upstreamOid) {
+      return null
+    }
+    await gitExecFileAsync(['merge-base', '--is-ancestor', upstreamOid, 'HEAD'], options)
+    return upstreamOid
+  } catch {
+    return null
+  }
+}
+
+// A conflict stop keeps the proof with this run, so only its own Continue can claim it.
+async function rememberPausedOrcaRebase(
+  worktreePath: string,
+  integratedUpstreamOid: string,
+  options: GitRuntimeOptions
+): Promise<void> {
+  try {
+    const { signal: _abortedSignal, ...readOptions } = options
+    if ((await detectConflictOperation(worktreePath, readOptions)) !== 'rebase') {
+      return
+    }
+    const branch = await readRebasingBranch(worktreePath, readOptions)
+    const { incarnation } = await readRebaseStopToken(worktreePath, readOptions)
+    if (branch && incarnation) {
+      recordOrcaRebaseProvenance(worktreePath, { branch, integratedUpstreamOid, incarnation })
+    }
+  } catch {
+    // Missing proof only keeps Pull and Sync offered.
+  }
 }

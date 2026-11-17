@@ -1,9 +1,6 @@
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type {
-  ContinueRebaseExpectedStop,
-  GitConflictOperation
-} from '../../../../../../shared/git/status/git-status-types'
-import type { RebaseAutoStashSetting } from './worktree-operation-store'
+import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
+import type { RebaseAutoStashSetting, RebaseStopReading } from './worktree-operation-store'
 import {
   formatSourceControlRefLabel,
   resolveSourceControlDisplayedBaseRef
@@ -13,8 +10,14 @@ export type BaseRebaseState =
   | { kind: 'none' }
   | { kind: 'up_to_date' }
   | { kind: 'behind'; behind: number; baseLabel: string; blockedBy: 'dirty' | 'busy' | null }
-  // emptyStop: Continue found nothing to commit at this HEAD, so Skip replaces Continue.
-  | { kind: 'rebase_paused'; unresolvedCount: number; emptyStop: boolean }
+  // continueState: unknown until the stop is read for this HEAD; blocked when Git cannot continue it.
+  | {
+      kind: 'rebase_paused'
+      unresolvedCount: number
+      continueState: RebaseContinueState
+    }
+
+export type RebaseContinueState = 'ready' | 'blocked' | 'unknown'
 
 export type BaseRebaseInputs = {
   summary: GitBranchCompareSummary | null
@@ -23,9 +26,8 @@ export type BaseRebaseInputs = {
   conflictOperation: GitConflictOperation
   unresolvedConflictCount: number
   hasTrackedChanges: boolean
-  hasStagedChanges: boolean
   rebaseAutoStash: RebaseAutoStashSetting
-  rebaseEmptyStop: ContinueRebaseExpectedStop | null
+  rebaseStop: RebaseStopReading | null
   statusHead: string | null
   isBusy: boolean
 }
@@ -71,7 +73,8 @@ export function resolveSourceControlRebaseModel(inputs: BaseRebaseInputs) {
       inputs.hasTrackedChanges,
       inputs.rebaseAutoStash
     ),
-    rebaseEmptyStop: baseRebaseState.kind === 'rebase_paused' && baseRebaseState.emptyStop,
+    rebaseContinueState:
+      baseRebaseState.kind === 'rebase_paused' ? baseRebaseState.continueState : null,
     // Read rebase.autoStash only where its answer changes the button: dirty, remote base, maybe behind.
     shouldProbeRebaseAutoStash:
       inputs.hasTrackedChanges &&
@@ -81,16 +84,23 @@ export function resolveSourceControlRebaseModel(inputs: BaseRebaseInputs) {
   }
 }
 
+// A reading for another HEAD is stale until re-read, so Continue waits rather than guessing.
+export function resolveRebaseContinueState(
+  rebaseStop: RebaseStopReading | null,
+  statusHead: string | null
+): RebaseContinueState {
+  if (!rebaseStop || (statusHead !== null && rebaseStop.token.head !== statusHead)) {
+    return 'unknown'
+  }
+  return rebaseStop.continueBlocked ? 'blocked' : 'ready'
+}
+
 export function resolveBaseRebaseState(inputs: BaseRebaseInputs): BaseRebaseState {
   if (inputs.conflictOperation === 'rebase') {
     return {
       kind: 'rebase_paused',
       unresolvedCount: inputs.unresolvedConflictCount,
-      emptyStop:
-        inputs.rebaseEmptyStop !== null &&
-        inputs.rebaseEmptyStop.head === inputs.statusHead &&
-        inputs.unresolvedConflictCount === 0 &&
-        !inputs.hasStagedChanges
+      continueState: resolveRebaseContinueState(inputs.rebaseStop, inputs.statusHead)
     }
   }
   const behind = resolveRebaseBehindCount(

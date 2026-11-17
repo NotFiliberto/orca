@@ -10320,16 +10320,12 @@
             "rebaseContinue": "Continuar",
             "continueRebasePausedAgain": "Rebase pausado no próximo conflito",
             "continueRebaseFailed": "Falha ao continuar o rebase",
-            "rebaseSkip": "Pular",
-            "rebaseEmptyCommitLabel": "commit vazio",
-            "skipRebaseCommitFailed": "Falha ao pular o commit",
             "rebaseAutostashConflict": "Rebase concluído. Suas alterações sem commit não puderam ser reaplicadas de forma limpa; estão salvas no stash.",
-            "rebaseEmptyCommit": "Não há mais nada para fazer commit aqui. Pule este commit ou aborte o rebase.",
             "rebaseStoppedByGit": "O Git pausou o rebase",
             "continueRebaseUnconfirmed": "Não foi possível confirmar o resultado. O controle de código foi atualizado para mostrar o estado atual.",
             "noRebaseInProgress": "Nenhum rebase em andamento",
-            "skipNeedsCleanTree": "Faça commit, stash ou descarte suas edições antes de pular.",
-            "skipStopMovedOn": "O rebase já avançou. Verifique o painel e tente novamente."
+            "rebaseStopMovedOn": "O rebase já avançou. Verifique o painel e tente novamente.",
+            "rebaseEmptyStep": "Nada para fazer commit nesta etapa. Aborte o rebase ou conclua-o em um terminal."
           },
           "checks": {
             "panel": {
@@ -10737,9 +10733,7 @@
                   "rebaseOntoNamedBase": "Fazer rebase em {{base}}",
                   "rebaseCommitOrStashFirst": "Faça commit ou stash das alterações primeiro",
                   "continueRebase": "Continuar rebase",
-                  "titleContinueRebase": "Continuar o rebase pausado",
-                  "skipRebaseCommit": "Pular commit",
-                  "titleSkipRebaseCommit": "Descartar este commit agora vazio e continuar o rebase"
+                  "titleContinueRebase": "Continuar o rebase pausado"
                 }
               },
               "primary": {

@@ -14,8 +14,8 @@ export type DropdownActionInputs = SourceControlPrimaryActionDecisionInputs & {
   rebaseBehindCount?: number | null
   // Tracked changes without rebase.autoStash: Git would refuse the rebase.
   rebaseBlockedByDirtyTree?: boolean
-  // The paused rebase's last Continue found nothing to commit; Skip replaces Continue.
-  rebaseEmptyStop?: boolean
+  // The paused rebase's stop has been read and Git can continue it.
+  rebaseContinueReady?: boolean
   primaryActionKind?: SourceControlPrimaryActionKind
 }
 
@@ -26,7 +26,6 @@ export type DropdownActionKind =
   | 'abort_merge'
   | 'abort_rebase'
   | 'continue_rebase'
-  | 'skip_rebase_commit'
   | 'create_pr'
   | 'push_create_pr'
   | 'push'

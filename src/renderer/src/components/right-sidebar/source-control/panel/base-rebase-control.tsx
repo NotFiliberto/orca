@@ -3,7 +3,7 @@ import { GitPullRequestArrow, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import type { BaseRebaseState } from './base-rebase-state'
+import type { BaseRebaseState, RebaseContinueState } from './base-rebase-state'
 
 export type BaseRebaseActions = {
   state: BaseRebaseState
@@ -13,7 +13,6 @@ export type BaseRebaseActions = {
   onRebase: () => void
   onAbortRebase: () => void
   onContinueRebase: () => void
-  onSkipRebaseCommit: () => void
 }
 
 /** Disabled buttons drop pointer and focus events, so the reason sits on a focusable wrapper. */
@@ -111,17 +110,16 @@ export function BaseRebaseTrailing({
 export function RebasePausedStrip({
   actions,
   unresolvedCount,
-  emptyStop
+  continueState
 }: {
   actions: BaseRebaseActions
   unresolvedCount: number
-  emptyStop: boolean
+  continueState: RebaseContinueState
 }): React.JSX.Element {
   const t = useTranslate()
   const pausedLabel = t('auto.components.right.sidebar.SourceControl.rebasePaused', 'Rebase paused')
-  const detailLabel = emptyStop
-    ? t('auto.components.right.sidebar.SourceControl.rebaseEmptyCommitLabel', 'empty commit')
-    : unresolvedCount > 0
+  const detailLabel =
+    unresolvedCount > 0
       ? t(
           'auto.components.right.sidebar.SourceControl.rebaseConflictCount',
           '{{count}} conflicts',
@@ -168,25 +166,15 @@ export function RebasePausedStrip({
         ) : null}
         {t('auto.components.right.sidebar.SourceControl.rebaseAbort', 'Abort')}
       </Button>
-      {emptyStop ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={busy}
-          onClick={actions.onSkipRebaseCommit}
-        >
-          {stepSpinner}
-          {t('auto.components.right.sidebar.SourceControl.rebaseSkip', 'Skip')}
-        </Button>
-      ) : (
+      {/* Git cannot continue this stop (nothing to commit, or its own pause): Abort only. */}
+      {continueState === 'blocked' ? null : (
         <ButtonWithReason reason={continueReason}>
           {(describedBy) => (
             <Button
               type="button"
               variant="outline"
               size="xs"
-              disabled={busy || unresolvedCount > 0}
+              disabled={busy || unresolvedCount > 0 || continueState !== 'ready'}
               aria-describedby={describedBy}
               onClick={actions.onContinueRebase}
             >

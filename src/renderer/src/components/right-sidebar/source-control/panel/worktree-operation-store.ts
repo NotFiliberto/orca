@@ -13,8 +13,10 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
-import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
-import type { ContinueRebaseExpectedStop } from '../../../../../../shared/git/status/git-status-types'
+import type {
+  GitConflictOperation,
+  RebaseStopToken
+} from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlActionError } from '../sync/action-error'
 import type { CreatePrIntentNotice } from '../commit/commit-area-types'
 import {
@@ -26,12 +28,22 @@ import {
 // `unsupported`: an older host without the probe, which callers treat as off.
 export type RebaseAutoStashSetting = boolean | 'unsupported' | null
 
-/** Bound to the branch and upstream Orca rebased; any mismatch retires it. */
-// paused: Orca's rebase stopped; done: it finished; active: the diverged result has been seen.
+/**
+ * Orca's own rebase of this branch integrated this upstream tip, so the remote only holds old
+ * copies. done: just finished; active: a diverged reading has matched it. Mismatches retire it.
+ */
 export type OrcaRebaseMarker = {
   branch: string
-  upstream: string | null
-  state: 'paused' | 'done' | 'active'
+  upstreamOid: string
+  state: 'done' | 'active'
+}
+
+/** The stop the panel last read; Continue sends it back so Git only continues what was shown. */
+export type RebaseStopReading = {
+  token: RebaseStopToken
+  branch: string | null
+  // Git found nothing to commit here, or paused for its own reason: Abort only.
+  continueBlocked: boolean
 }
 
 /** Everything Source Control tracks for one worktree copy; lives past panel/section unmounts. */
@@ -45,8 +57,7 @@ export type WorktreeOperationRecord = {
   isContinuingRebase: boolean
   // null until probed; Git refuses a rebase over tracked changes unless this is on.
   rebaseAutoStash: RebaseAutoStashSetting
-  // HEAD where Continue found nothing to commit; only that stop offers Skip.
-  rebaseEmptyStop: ContinueRebaseExpectedStop | null
+  rebaseStop: RebaseStopReading | null
   // Orca started this rebase; once done it hides Pull/Sync/Fast-forward, never enables a force path.
   orcaRebase: OrcaRebaseMarker | null
   remoteActionError: SourceControlActionError | null
@@ -92,7 +103,7 @@ function createRecord(draftKey: string): WorktreeOperationRecord {
     isAbortingOperation: false,
     isContinuingRebase: false,
     rebaseAutoStash: null,
-    rebaseEmptyStop: null,
+    rebaseStop: null,
     orcaRebase: null,
     remoteActionError: null,
     remoteActionSequence: 0,

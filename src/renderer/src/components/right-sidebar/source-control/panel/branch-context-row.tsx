@@ -141,7 +141,7 @@ export function SourceControlBranchContextRow({
       <RebasePausedStrip
         actions={rebase}
         unresolvedCount={rebase.state.unresolvedCount}
-        emptyStop={rebase.state.emptyStop}
+        continueState={rebase.state.continueState}
       />
     ) : null
 

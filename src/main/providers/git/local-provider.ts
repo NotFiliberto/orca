@@ -14,10 +14,10 @@ import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import {
   abortMerge,
   abortRebase,
-  continueRebase,
   detectConflictOperation,
   readRebaseAutoStash
 } from '../../git/source-control/mutations/git-conflict-operation'
+import { continueRebase } from '../../git/source-control/mutations/rebase-continue'
 import {
   bulkDiscardChanges,
   discardChanges

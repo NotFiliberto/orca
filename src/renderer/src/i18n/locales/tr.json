@@ -14121,18 +14121,14 @@
             "rebaseResolveConflictsFirst": "Önce çakışmaları çözün",
             "rebaseAbort": "İptal et",
             "rebaseContinue": "Devam et",
-            "rebaseSkip": "Atla",
-            "rebaseEmptyCommitLabel": "boş commit",
             "continueRebasePausedAgain": "Rebase sonraki çakışmada duraklatıldı",
             "continueRebaseFailed": "Rebase sürdürülemedi",
-            "skipRebaseCommitFailed": "Commit atlanamadı",
             "rebaseAutostashConflict": "Rebase tamamlandı. Commit edilmemiş değişiklikleriniz temiz biçimde yeniden uygulanamadı; stash içinde saklandı.",
-            "rebaseEmptyCommit": "Burada commit edilecek bir şey kalmadı. Bu commit’i atlayın veya rebase’i iptal edin.",
             "rebaseStoppedByGit": "Git rebase’i duraklattı",
             "continueRebaseUnconfirmed": "Sonuç doğrulanamadı. Kaynak denetimi güncel durumu göstermek için yenilendi.",
             "noRebaseInProgress": "Devam eden rebase yok",
-            "skipNeedsCleanTree": "Atlamadan önce düzenlemelerinizi commit edin, stash’leyin veya atın.",
-            "skipStopMovedOn": "Rebase zaten ilerledi. Paneli kontrol edip yeniden deneyin."
+            "rebaseStopMovedOn": "Rebase zaten ilerledi. Paneli kontrol edip yeniden deneyin.",
+            "rebaseEmptyStep": "Bu adımda commit edilecek bir şey yok. Rebase’i iptal edin veya bir terminalde tamamlayın."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
@@ -14643,9 +14639,7 @@
                   "rebaseOntoNamedBase": "{{base}} üzerine rebase",
                   "rebaseCommitOrStashFirst": "Önce değişiklikleri commit edin veya stash’leyin",
                   "continueRebase": "Rebase’e devam et",
-                  "titleContinueRebase": "Duraklatılmış rebase’e devam et",
-                  "skipRebaseCommit": "Commit’i atla",
-                  "titleSkipRebaseCommit": "Artık boş olan bu commit’i bırak ve rebase’e devam et"
+                  "titleContinueRebase": "Duraklatılmış rebase’e devam et"
                 }
               },
               "primary": {

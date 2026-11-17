@@ -14357,18 +14357,14 @@
             "rebaseResolveConflictsFirst": "Сначала разрешите конфликты",
             "rebaseAbort": "Прервать",
             "rebaseContinue": "Продолжить",
-            "rebaseSkip": "Пропустить",
-            "rebaseEmptyCommitLabel": "пустой коммит",
             "continueRebasePausedAgain": "Rebase приостановлен на следующем конфликте",
             "continueRebaseFailed": "Не удалось продолжить rebase",
-            "skipRebaseCommitFailed": "Не удалось пропустить коммит",
             "rebaseAutostashConflict": "Rebase выполнен. Незакоммиченные изменения не удалось чисто применить снова; они сохранены в stash.",
-            "rebaseEmptyCommit": "Здесь больше нечего коммитить. Пропустите этот коммит или прервите rebase.",
             "rebaseStoppedByGit": "Git приостановил rebase",
             "continueRebaseUnconfirmed": "Не удалось подтвердить результат. Система контроля версий обновлена и показывает текущее состояние.",
             "noRebaseInProgress": "Rebase не выполняется",
-            "skipNeedsCleanTree": "Перед пропуском закоммитьте, спрячьте или отмените изменения.",
-            "skipStopMovedOn": "Rebase уже продвинулся дальше. Проверьте панель и повторите попытку."
+            "rebaseStopMovedOn": "Rebase уже продвинулся дальше. Проверьте панель и повторите попытку.",
+            "rebaseEmptyStep": "На этом шаге нечего коммитить. Прервите rebase или завершите его в терминале."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Не удалось запустить выбранного агента.",
@@ -14913,9 +14909,7 @@
                   "rebaseOntoNamedBase": "Rebase на {{base}}",
                   "rebaseCommitOrStashFirst": "Сначала закоммитьте или спрячьте изменения",
                   "continueRebase": "Продолжить rebase",
-                  "titleContinueRebase": "Продолжить приостановленный rebase",
-                  "skipRebaseCommit": "Пропустить коммит",
-                  "titleSkipRebaseCommit": "Отбросить ставший пустым коммит и продолжить rebase"
+                  "titleContinueRebase": "Продолжить приостановленный rebase"
                 }
               },
               "primary": {

@@ -13783,18 +13783,14 @@
             "rebaseResolveConflictsFirst": "請先解決衝突",
             "rebaseAbort": "中止",
             "rebaseContinue": "繼續",
-            "rebaseSkip": "略過",
-            "rebaseEmptyCommitLabel": "空白提交",
             "continueRebasePausedAgain": "重定基底在下一個衝突處暫停",
             "continueRebaseFailed": "繼續重定基底失敗",
-            "skipRebaseCommitFailed": "略過提交失敗",
             "rebaseAutostashConflict": "已重定基底。你未提交的變更無法乾淨地重新套用，已儲存在 stash 中。",
-            "rebaseEmptyCommit": "這裡已沒有可提交的內容。略過此提交或中止重定基底。",
             "rebaseStoppedByGit": "Git 暫停了重定基底",
             "continueRebaseUnconfirmed": "無法確認結果。原始碼控制已重新整理以顯示目前狀態。",
             "noRebaseInProgress": "沒有進行中的重定基底",
-            "skipNeedsCleanTree": "略過前請先提交、暫存或捨棄你的編輯。",
-            "skipStopMovedOn": "重定基底已經繼續進行。請查看面板後再試一次。"
+            "rebaseStopMovedOn": "重定基底已經繼續進行。請查看面板後再試一次。",
+            "rebaseEmptyStep": "此步驟沒有可提交的內容。請中止重定基底，或在終端機中完成它。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",
@@ -14300,9 +14296,7 @@
                   "rebaseOntoNamedBase": "重定基底到 {{base}}",
                   "rebaseCommitOrStashFirst": "請先提交或暫存變更",
                   "continueRebase": "繼續重定基底",
-                  "titleContinueRebase": "繼續已暫停的重定基底",
-                  "skipRebaseCommit": "略過提交",
-                  "titleSkipRebaseCommit": "捨棄這個已變成空白的提交並繼續重定基底"
+                  "titleContinueRebase": "繼續已暫停的重定基底"
                 }
               },
               "primary": {
