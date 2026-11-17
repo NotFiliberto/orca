@@ -278,25 +278,26 @@ async function run(arm, sessions) {
   const probe = []
   const chain = []
   await new Promise((resolve) => setTimeout(resolve, 3000))
-  for (let index = 0; Date.now() < stopAt - 3000; index++) {
-    const startedAt = performance.now()
-    let first = 0
-    for (let step = 0; step < 3; step++) {
-      await owner.write(
-        stepsCommand('probe', [
-          itemStep(
-            message(
-              `probe-${arm.name}-${sessions}-${Date.now()}-${index}-${step}`,
-              'user',
-              'Please continue.',
-              true
-            )
-          )
-        ])
-      )
-      first ||= performance.now() - startedAt
+  const control = (label) => ({
+    target: { sessionId: 'probe', epoch: 'epoch', ownerToken: 'bench' },
+    savedAt: Date.now(),
+    operation: {
+      kind: 'item',
+      identity: { provider: 'orca', clientMessageId: label },
+      body: { kind: 'status', text: label },
+      options
     }
-    probe.push(first)
+  })
+  // Handover, then (timed) the turn item and the accepted receipt, as a send's journal chain runs.
+  for (let index = 0; Date.now() < stopAt - 3000; index++) {
+    const label = `probe-${arm.name}-${sessions}-${Date.now()}-${index}`
+    await owner.write(control(`${label}-handover`))
+    const startedAt = performance.now()
+    await owner.write(
+      stepsCommand('probe', [itemStep(message(`${label}-turn`, 'assistant', 'turn', false))])
+    )
+    probe.push(performance.now() - startedAt)
+    await owner.write(control(`${label}-accepted`))
     chain.push(performance.now() - startedAt)
     await new Promise((resolve) => setTimeout(resolve, 1500))
   }
@@ -315,8 +316,8 @@ async function run(arm, sessions) {
     arm: arm.name,
     sha: arm.sha,
     sessions,
-    probeWriteMs: summary(probe),
-    probeChainOf3Ms: summary(chain),
+    turnItemMs: summary(probe),
+    receiptMs: summary(chain),
     streamWriteMs: summary(streamWrites),
     writesPerSecond: Math.round(timings.length / seconds),
     ...(instrumented
