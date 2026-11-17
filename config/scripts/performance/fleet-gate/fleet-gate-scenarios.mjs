@@ -1,6 +1,7 @@
 // The four measured windows. Each drives the app the way a user or agent does, then the probes read the counters.
 import fs from 'node:fs'
 import path from 'node:path'
+import http from 'node:http'
 
 const STREAM_PANES = 10
 const STREAM_EVENTS_PER_SECOND = 20
@@ -280,6 +281,127 @@ async function switchWorkspaces({ page, windowMs }) {
   }
 }
 
+
+const TAB_INTERVAL_MS = 4_000
+const TAB_STRAGGLER_MS = 15_000
+
+function listen(server) {
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server.address().port)))
+}
+
+const percentile = (values, p) => {
+  if (values.length === 0) {
+    return null
+  }
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))]
+}
+
+// Opens a browser tab every few seconds while agents stream; servers stamp when each request leaves Orca.
+async function openBrowserTabsUnderLoad({ page, app, userDataDir, windowMs, outDir, label }) {
+  const hits = new Map()
+  const now = () => Date.now()
+  const html = (res, body) => {
+    res.setHeader('content-type', 'text/html')
+    res.setHeader('cache-control', 'no-store')
+    res.end(body)
+  }
+  const frameServer = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://local')
+    const hit = hits.get(url.searchParams.get('id'))
+    if (url.pathname === '/frame') {
+      if (hit) {
+        hit.frameAt ??= now()
+      }
+      html(res, '<title>frame</title><p>content</p>' + Array.from({ length: 10 }, (_, i) => `<script src="/s${i}.js?id=${url.searchParams.get('id')}"></script>`).join(''))
+      return
+    }
+    if (hit) {
+      hit.frameLastAt = now()
+    }
+    res.setHeader('content-type', 'text/javascript')
+    res.end('')
+  })
+  const framePort = await listen(frameServer)
+  const shellServer = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://local')
+    const id = url.searchParams.get('id')
+    const hit = hits.get(id)
+    if (url.pathname === '/page') {
+      if (hit) {
+        hit.shellAt ??= now()
+      }
+      html(res, `<title>page ${id}</title><iframe src="http://127.0.0.1:${framePort}/frame?id=${id}"></iframe>` + Array.from({ length: 20 }, (_, i) => `<img src="/img${i}?id=${id}">`).join(''))
+      return
+    }
+    res.statusCode = 204
+    res.end()
+  })
+  const shellPort = await listen(shellServer)
+  await showTerminalWorkspace(page)
+  await app.evaluate(async () => {
+    const inspector = process.getBuiltinModule('node:inspector')
+    const session = new inspector.Session()
+    session.connect()
+    globalThis.__fleetGateProfiler = session
+    const post = (method, params) => new Promise((resolve, reject) => session.post(method, params, (error, result) => (error ? reject(error) : resolve(result))))
+    await post('Profiler.enable')
+    await post('Profiler.setSamplingInterval', { interval: 1000 })
+    await post('Profiler.start')
+  })
+  const streaming = streamAgentStatus({ page, userDataDir, windowMs })
+  const deadline = Date.now() + windowMs
+  let opened = 0
+  let createFailures = 0
+  while (Date.now() < deadline) {
+    const id = String(opened)
+    hits.set(id, { createdAt: now() })
+    const created = await page
+      .evaluate((target) => {
+        const state = window.__store.getState()
+        return Boolean(state.createBrowserTab(state.activeWorktreeId, target, { activate: true })?.activePageId)
+      }, `http://127.0.0.1:${shellPort}/page?id=${id}`)
+      .catch(() => false)
+    if (!created) {
+      createFailures += 1
+    }
+    hits.get(id).createdReturnedAt = now()
+    opened += 1
+    await sleep(TAB_INTERVAL_MS)
+  }
+  const streamed = await streaming
+  await sleep(TAB_STRAGGLER_MS)
+  const profile = await app.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const session = globalThis.__fleetGateProfiler
+        session.post('Profiler.stop', (error, result) => {
+          session.disconnect()
+          resolve(error ? null : JSON.stringify(result.profile))
+        })
+      })
+  )
+  if (profile) {
+    fs.writeFileSync(path.join(outDir, `${label}-${Date.now()}-browser-main.cpuprofile`), profile)
+  }
+  frameServer.close()
+  shellServer.close()
+  const tabs = [...hits.entries()].map(([id, hit]) => ({
+    id,
+    shellMs: hit.shellAt ? hit.shellAt - hit.createdAt : null,
+    iframeMs: hit.frameAt ? hit.frameAt - hit.createdAt : null,
+    doneMs: hit.frameLastAt ? hit.frameLastAt - hit.createdAt : null,
+    createCallMs: hit.createdReturnedAt - hit.createdAt
+  }))
+  fs.writeFileSync(path.join(outDir, `${label}-${Date.now()}-browser-tabs.json`), JSON.stringify(tabs, null, 1))
+  const pick = (key) => tabs.map((tab) => tab[key]).filter((value) => value !== null)
+  const never = tabs.filter((tab) => tab.iframeMs === null).length
+  return {
+    note: `${opened} tabs (${createFailures} create failures, ${never} iframe never requested); shell p50 ${percentile(pick('shellMs'), 50)} max ${Math.max(...pick('shellMs'), 0)} ms; iframe p50 ${percentile(pick('iframeMs'), 50)} p90 ${percentile(pick('iframeMs'), 90)} max ${Math.max(...pick('iframeMs'), 0)} ms; streaming: ${streamed.note}`,
+    tabs
+  }
+}
+
 export const SCENARIOS = {
   idle: async ({ windowMs }) => {
     await sleep(windowMs)
@@ -287,5 +409,6 @@ export const SCENARIOS = {
   },
   typing: typeIntoComposer,
   streaming: streamAgentStatus,
-  switch: switchWorkspaces
+  switch: switchWorkspaces,
+  browser: openBrowserTabsUnderLoad
 }

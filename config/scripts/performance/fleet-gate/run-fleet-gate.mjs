@@ -486,7 +486,7 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       await resetMainProbe(app)
       await renderer.reset()
       const started = Date.now()
-      const driven = await SCENARIOS[name]({ page, userDataDir, windowMs })
+      const driven = await SCENARIOS[name]({ page, app, userDataDir, windowMs, outDir, label })
       const elapsed = Date.now() - started
       const main = await snapshotMainProbe(app)
       const rendererSnapshot = await renderer.snapshot()
@@ -513,6 +513,18 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
     }
   } finally {
     await close()
+    const logs = path.join(userDataDir, 'logs')
+    const keep = path.join(outDir, `${label}-${Date.now()}-logs`)
+    fs.mkdirSync(keep, { recursive: true })
+    for (const file of fs.existsSync(logs) ? fs.readdirSync(logs) : []) {
+      if (/^main\.trace\.ndjson/.test(file)) {
+        fs.copyFileSync(path.join(logs, file), path.join(keep, file))
+      }
+    }
+    if (fs.existsSync(path.join(userDataDir, 'event-loop-delay.ndjson'))) {
+      fs.copyFileSync(path.join(userDataDir, 'event-loop-delay.ndjson'), path.join(keep, 'event-loop-delay.ndjson'))
+    }
+    console.log(`[fleet-gate] ${label} logs kept in ${keep}`)
     fs.rmSync(runDir, { recursive: true, force: true })
   }
   return result

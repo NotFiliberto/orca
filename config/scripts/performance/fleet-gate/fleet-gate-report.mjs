@@ -12,6 +12,7 @@ export const METRICS = [
   { key: 'longTaskMsPerSec', label: 'long tasks ms/s', rel: 0.5, abs: 50 },
   { key: 'stalls100', label: 'main stalls >100ms', rel: 0.5, abs: 3 },
   { key: 'stallMaxMs', label: 'main stall max ms', rel: 1, abs: 250 },
+  { key: 'mainCpuMsPerSec', label: 'main CPU ms/s', rel: 0.25, abs: 5 },
   { key: 'mainHeapMb', label: 'main heap MB', rel: 0.15, abs: 50 },
   { key: 'rendererHeapMb', label: 'renderer heap MB', rel: 0.15, abs: 100 }
 ]
@@ -33,6 +34,7 @@ export function windowMetrics(main, renderer, windowMs) {
     longTaskMsPerSec: renderer.longMs / seconds,
     stalls100: main.stalls100,
     stallMaxMs: main.stallMaxMs,
+    mainCpuMsPerSec: main.cpuMs / seconds,
     mainHeapMb: main.heapUsedMb,
     rendererHeapMb: renderer.heapUsedMb
   }

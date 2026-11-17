@@ -30,7 +30,8 @@ function installMainProbe({ app, ipcMain, webContents }) {
     stalls100: 0,
     stalls500: 0,
     stallMaxMs: 0,
-    delay: perfHooks.monitorEventLoopDelay({ resolution: 10 })
+    delay: perfHooks.monitorEventLoopDelay({ resolution: 10 }),
+    cpu0: process.cpuUsage()
   }
   state.delay.enable()
   const bump = (map, channel, bytes, noop) => {
@@ -152,6 +153,7 @@ function installMainProbe({ app, ipcMain, webContents }) {
       state.stalls500 = 0
       state.stallMaxMs = 0
       state.delay.reset()
+      state.cpu0 = process.cpuUsage()
     },
     snapshot() {
       const rows = (map) =>
@@ -171,7 +173,8 @@ function installMainProbe({ app, ipcMain, webContents }) {
         stalls500: state.stalls500,
         stallMaxMs: Math.round(state.stallMaxMs),
         loopDelayP99Ms: Math.round(state.delay.percentile(99) / 1e6),
-        heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1048576)
+        heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1048576),
+        cpuMs: (() => { const u = process.cpuUsage(state.cpu0); return (u.user + u.system) / 1000 })()
       }
     }
   }
