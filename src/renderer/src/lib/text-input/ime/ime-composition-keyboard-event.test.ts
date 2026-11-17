@@ -197,6 +197,13 @@ describe('useImeEnterGestureOwnership', () => {
       swallowed: true
     },
     {
+      name: 'swallows the Enter that confirms full-width Latin from a Japanese IME',
+      commitKey: { key: 'Enter', keyCode: 229, code: 'Enter' },
+      committed: 'ｈｅｌｌｏ',
+      frameRuns: false,
+      swallowed: true
+    },
+    {
       name: 'swallows the IBus confirm Enter that follows compositionend',
       commitKey: null,
       committed: '日本語',

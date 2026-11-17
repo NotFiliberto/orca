@@ -33,13 +33,17 @@ type ImeEnterGestureEvent = Pick<
 const HANGUL_ONLY = /^\p{Script=Hangul}+$/u
 const LATIN_ONLY = /^[\p{Script=Latin}\p{M}]+$/u
 const NON_ASCII = /[^\p{ASCII}]/u
+// CJK IMEs confirm full-width letters (ａｂｃ) through a candidate step.
+const FULL_WIDTH_FORMS = /[\uFF00-\uFFEF]/u
 
 /** Hangul, and Vietnamese Telex/VNI (Latin with diacritics), have no candidate step either. Plain
  * ASCII stays a confirm: Pinyin's Enter commits the typed letters instead of sending. */
 function commitsWithOwnEnter(committedText: string): boolean {
   return (
     HANGUL_ONLY.test(committedText) ||
-    (LATIN_ONLY.test(committedText) && NON_ASCII.test(committedText))
+    (LATIN_ONLY.test(committedText) &&
+      NON_ASCII.test(committedText) &&
+      !FULL_WIDTH_FORMS.test(committedText))
   )
 }
 
