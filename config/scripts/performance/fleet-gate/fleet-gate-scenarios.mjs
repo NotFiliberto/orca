@@ -10,25 +10,32 @@ const SWITCH_INTERVAL_MS = 1_000
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function findHookEndpoint(root) {
-  if (!fs.existsSync(root)) {
-    return null
-  }
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    const full = path.join(root, entry.name)
-    if (entry.isFile() && (entry.name === 'endpoint.env' || entry.name === 'endpoint.cmd')) {
-      return full
+  // Newest file wins: a copied seed carries the previous launch's stale endpoint.
+  const found = []
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) {
+      return
     }
-    if (entry.isDirectory()) {
-      const nested = findHookEndpoint(full)
-      if (nested) {
-        return nested
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isFile() && (entry.name === 'endpoint.env' || entry.name === 'endpoint.cmd')) {
+        found.push({ full, mtime: fs.statSync(full).mtimeMs })
+      } else if (entry.isDirectory()) {
+        walk(full)
       }
     }
   }
-  return null
+  walk(root)
+  found.sort((a, b) => b.mtime - a.mtime)
+  return found[0]?.full ?? null
 }
 
-function readHookEndpoint(userDataDir) {
+export function hookEndpointMtime(userDataDir) {
+  const file = findHookEndpoint(path.join(userDataDir, 'agent-hooks'))
+  return file ? fs.statSync(file).mtimeMs : 0
+}
+
+export function readHookEndpoint(userDataDir) {
   const file = findHookEndpoint(path.join(userDataDir, 'agent-hooks'))
   if (!file) {
     return null

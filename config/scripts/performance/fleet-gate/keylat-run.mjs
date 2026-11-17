@@ -22,7 +22,7 @@ import {
   waitForLaunches,
   writeClaudeStub
 } from './fleet-gate-launch-burst.mjs'
-import { SCENARIOS, seedAgentStatuses } from './fleet-gate-scenarios.mjs'
+import { SCENARIOS, seedAgentStatuses, hookEndpointMtime, readHookEndpoint } from './fleet-gate-scenarios.mjs'
 import {
   buildSyntheticFleetSeed,
   readFleetCensus,
@@ -557,55 +557,31 @@ function installMarkers() {
 
 async function startLiveAgents(page, userDataDir) {
   const result = await page.evaluate(async () => {
-    const active = window.__store.getState().activeWorktreeId
-    const list = await window.api.runtime.call({ method: 'terminal.list', params: { limit: 60 } })
-    const terminals = (list.result?.terminals ?? []).filter((terminal) => terminal.worktreeId !== active)
+    const state = window.__store.getState()
+    const active = state.activeWorktreeId
+    const list = await window.api.runtime.call({ method: 'worktree.list', params: { limit: 5000 } })
+    const worktrees = (list.result?.worktrees ?? []).filter((worktree) => worktree.id !== active && /wt-\d{4}$/.test(worktree.path)).slice(-5)
     let started = 0
     const errors = []
-    for (const terminal of terminals.slice(0, 5)) {
-      const handle = terminal.handle ?? terminal.id
-      const response = await window.api.runtime.call({
-        method: 'terminal.send',
+    for (const worktree of worktrees) {
+      const created = await window.api.runtime.call({
+        method: 'terminal.create',
         params: {
-          terminal: handle,
-          text: "while :; do printf 'agent %s working on step %s of the plan\\n' $$ $RANDOM; sleep 0.03; done",
-          enter: true
+          worktree: `id:${worktree.id}`,
+          clientMutationId: crypto.randomUUID(),
+          command: "while :; do printf 'agent %s working on step %s of the plan\\n' $$ $RANDOM; sleep 0.03; done"
         }
       })
-      if (response.ok) {
+      if (created.ok) {
         started += 1
       } else {
-        errors.push(JSON.stringify(response.error ?? response).slice(0, 160))
+        errors.push(`create ${JSON.stringify(created.error ?? created).slice(0, 200)}`)
       }
     }
-    return { listed: terminals.length, started, errors: errors.slice(0, 2), sample: JSON.stringify(list.result?.terminals?.[0] ?? null).slice(0, 300) }
+    return { worktrees: worktrees.length, started, errors: errors.slice(0, 3), stillActive: window.__store.getState().activeWorktreeId === active }
   })
   let stop = false
-  const endpoint = (() => {
-    try {
-      const root = path.join(userDataDir, 'agent-hooks')
-      const find = (dir) => {
-        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-          const full = path.join(dir, entry.name)
-          if (entry.isFile() && entry.name === 'endpoint.env') return full
-          if (entry.isDirectory()) {
-            const nested = find(full)
-            if (nested) return nested
-          }
-        }
-        return null
-      }
-      const file = find(root)
-      return Object.fromEntries(
-        fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean).map((line) => {
-          const [key, ...rest] = line.trim().split('=')
-          return [key, rest.join('=')]
-        })
-      )
-    } catch {
-      return null
-    }
-  })()
+  const endpoint = readHookEndpoint(userDataDir)
   const panes = await page.evaluate(() => {
     const state = window.__store.getState()
     const out = []
@@ -658,9 +634,14 @@ async function startLiveAgents(page, userDataDir) {
 async function measureKeys({ label, buildDir, seedDir, options, runDir, outDir }) {
   const userDataDir = path.join(runDir, 'user-data')
   fs.cpSync(seedDir, userDataDir, { recursive: true, mode: fs.constants.COPYFILE_FICLONE })
+  const launchedAt = Date.now()
   const { page, close } = await launchCopy({ buildDir, runDir, userDataDir, label, outDir })
   const result = { label, notes: [] }
   try {
+    for (let waited = 0; waited < 60 && hookEndpointMtime(userDataDir) < launchedAt; waited += 1) {
+      await sleep(1_000)
+    }
+    result.hookEndpointFresh = hookEndpointMtime(userDataDir) >= launchedAt
     const agents = await seedAgentStatuses({ page, userDataDir, count: AGENT_PANES })
     result.agentStatuses = agents
     console.log(`[keylat] ${label} up; settling ${options.settleMs / 1000}s`)
@@ -717,7 +698,9 @@ async function measureKeys({ label, buildDir, seedDir, options, runDir, outDir }
       eventToDispatch: summarize(samples.map((s) => s.dispatched - s.ts)),
       eventToFirstFrame: summarize(samples.map((s) => (s.raf ?? Number.NaN) - s.ts))
     }
-    const exact = report?.exactSamples ?? []
+    result.diagnosticShape = report ? Object.keys(report).slice(0, 40) : null
+    result.diagnosticHead = report ? JSON.stringify(report).slice(0, 1500) : null
+    const exact = report?.exactSamples ?? report?.samples?.exact ?? []
     result.diagnostic = {
       exactInputs: report?.exactInputs ?? null,
       eventToHandler: summarize(exact.map((s) => s.eventToHandlerMs ?? Number.NaN)),
