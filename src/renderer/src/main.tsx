@@ -1,3 +1,4 @@
+import './keylat-probe'
 // Install the import-free hook before react-dom reads it during evaluation; the observer below wraps a per-commit property and can load later.
 import './diagnostics/react-commits/react-devtools-commit-hook-shim'
 import './diagnostics/react-commits/react-commit-cascade-observer'

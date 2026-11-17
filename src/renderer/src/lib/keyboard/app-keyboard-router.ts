@@ -2,7 +2,8 @@
 
 type AppKeyEventType = 'keydown' | 'keyup'
 type AppKeyListener = (event: KeyboardEvent) => void
-type Registration = { listener: AppKeyListener; active: boolean }
+import { keylatSite, recordKeylat } from '../../keylat-probe'
+type Registration = { listener: AppKeyListener; active: boolean; site?: string }
 
 const registrations: Record<AppKeyEventType, Registration[]> = { keydown: [], keyup: [] }
 let installedOn: Window | null = null
@@ -26,7 +27,12 @@ function dispatch(type: AppKeyEventType, event: KeyboardEvent): void {
         continue
       }
       try {
-        registration.listener(event)
+        const keylatStarted = performance.now()
+        try {
+          registration.listener(event)
+        } finally {
+          recordKeylat(`[router ${type}] ${registration.site}`, performance.now() - keylatStarted)
+        }
       } catch (error) {
         // Why: a throwing owner must not cost the rest their shortcuts, as with native listeners.
         reportError(error)
@@ -68,10 +74,11 @@ export function addAppKeyListener(
   if (list.some((registration) => registration.active && registration.listener === listener)) {
     return
   }
+  const site = `${listener.name || 'anonymous'} @ ${keylatSite(2)}`
   if (options.first) {
-    list.unshift({ listener, active: true })
+    list.unshift({ listener, active: true, site })
   } else {
-    list.push({ listener, active: true })
+    list.push({ listener, active: true, site })
   }
 }
 
