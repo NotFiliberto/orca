@@ -144,6 +144,10 @@ function streamInSpan(
           } else {
             child.once('close', reportTermination)
           }
+          // Streamed reads hold only admission, which a lost worker's child returns without termination proof.
+          if ('id' in child) {
+            child.once('worker-lost', reportTermination)
+          }
           child.once('error', () => {
             // A worker-launched child always closes, even when it never started; an error before its pid proves nothing.
             if (!child.pid && !('id' in child)) {

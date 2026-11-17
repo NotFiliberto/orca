@@ -10,7 +10,7 @@ import { execFileCapture } from '../process-capture/exec-file-capture'
 import { resolveGitCommand } from '../host-routing/git-command-resolution'
 import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from '../git-exec-options'
 import { promptGuardGitEnv } from './git-process-env'
-import { acquireGitAdmission } from '../admission/git-subprocess-admission'
+import { acquireGitAdmission, trackGitChildAdmission } from '../admission/git-subprocess-admission'
 
 const CORE_SSH_COMMAND_PROBE_TIMEOUT_MS = 2500
 // Cold WSL starts and login rc files need the environment probe's startup budget.
@@ -39,10 +39,7 @@ export async function buildNetworkSshPolicyEnv(
     tier: options.admissionTier,
     signal: options.signal
   })
-  let reportTerminated: () => void = () => {}
-  const terminated = new Promise<void>((resolve) => {
-    reportTerminated = resolve
-  })
+  const tracking = trackGitChildAdmission()
   let configured = parseGitSshConfig('')
   try {
     const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
@@ -56,7 +53,8 @@ export async function buildNetworkSshPolicyEnv(
       ),
       env: promptEnv,
       signal: options.signal,
-      onChildTerminated: reportTerminated
+      onChildTerminated: tracking.onChildTerminated,
+      onWorkerLost: tracking.onWorkerLost
     })
     const payload = resolved.captured?.readStdout(String(stdout)) ?? String(stdout)
     configured = parseGitSshConfig(payload)
@@ -65,7 +63,7 @@ export async function buildNetworkSshPolicyEnv(
       throw error
     }
   } finally {
-    void terminated.then(grant.release)
+    void tracking.admissionReturned.then(grant.release)
   }
 
   const policy = buildGitSshPolicyEnv(promptEnv, configured.command, configured.variant)

@@ -278,7 +278,7 @@ describe('WorkerThreadChildProcessHost when the worker dies', () => {
     expect(errors).toEqual(['Child process worker failed: boom'])
   })
 
-  it('closes a child whose root already exited when the worker dies before its close', async () => {
+  it('returns only capacity for a child whose root exited when the worker dies before its close', () => {
     const worker = Object.assign(new EventEmitter(), {
       postMessage: () => {},
       unref: () => {},
@@ -290,13 +290,15 @@ describe('WorkerThreadChildProcessHost when the worker dies', () => {
       throw new Error('worker launch was refused')
     }
     child.on('error', () => {})
-    const closed = waitForClose(child)
+    const events: string[] = []
+    child.on('worker-lost', () => events.push('worker-lost'))
+    child.on('close', () => events.push('close'))
 
     worker.emit('message', { type: 'spawn', id: 1, pid: 4242 })
     worker.emit('message', { type: 'exit', id: 1, code: 0, signal: null })
     worker.emit('exit', 1)
 
-    await expect(closed).resolves.toEqual([0, null])
+    expect(events).toEqual(['worker-lost'])
   })
 })
 

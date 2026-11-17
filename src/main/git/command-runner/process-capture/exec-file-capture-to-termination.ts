@@ -38,7 +38,13 @@ export async function execFileCaptureToTermination(
     signal: options.signal,
     terminationBarrier: termination ?? true,
     onChildTerminated: options.onChildTerminated,
-    launch: launchProcessSpecOffMainThreadOnWindows,
+    launch: (spec) => {
+      const child = launchProcessSpecOffMainThreadOnWindows(spec)
+      if (child && options.onWorkerLost) {
+        child.once('worker-lost', options.onWorkerLost)
+      }
+      return child
+    },
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   const result = await pending

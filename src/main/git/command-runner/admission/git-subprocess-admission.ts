@@ -26,6 +26,28 @@ export function releaseGitAdmissionAfter(
   }
 }
 
+/** A child's full termination, plus the earlier point its permit may return: when its worker is lost, mutation fences keep
+ * waiting on `terminated` (proof may never come) but scarce Git capacity is not held for the session. */
+export function trackGitChildAdmission(): {
+  terminated: Promise<void>
+  admissionReturned: Promise<void>
+  onChildTerminated: () => void
+  onWorkerLost: () => void
+} {
+  let onChildTerminated: () => void = () => {}
+  let onWorkerLost: () => void = () => {}
+  const terminated = new Promise<void>((resolve) => {
+    onChildTerminated = resolve
+  })
+  const admissionReturned = Promise.race([
+    terminated,
+    new Promise<void>((resolve) => {
+      onWorkerLost = resolve
+    })
+  ])
+  return { terminated, admissionReturned, onChildTerminated, onWorkerLost }
+}
+
 export function _resetGitAdmissionForTests(replacement = new GitAdmissionScheduler()): void {
   scheduler = replacement
 }

@@ -18,6 +18,8 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   stdin?: string
   terminationBarrier?: boolean
   onChildTerminated?: () => void
+  /** The worker that ran this child died before proving its termination; only capacity may be returned now. */
+  onWorkerLost?: () => void
   admissionTier?: GitAdmissionTier
   createTimeoutError?: () => Error
   /** Called once when the deadline — not an abort — is what ended the process. */
@@ -260,6 +262,9 @@ export function execFileCapture(
           finish(error)
         }
       })
+      if (options.onWorkerLost && 'id' in child) {
+        child.once('worker-lost', options.onWorkerLost)
+      }
       if (ownedPosixGroup) {
         if ('stopOwnedGroup' in child) {
           child.once('group-terminated', reportChildTerminated)

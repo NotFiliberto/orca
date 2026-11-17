@@ -157,9 +157,10 @@ export class WorkerThreadChildProcess extends EventEmitter {
     if (!this.nativeLike || this.closed || pid === undefined) {
       return
     }
+    // Callers may return admission now but keep mutation fences until close, which needs proof (council ruling).
+    this.emit('worker-lost')
+    // An exited root's pid may be reused, and descendants may still hold its pipes: no kill, no close.
     if (this.exitCode !== null || this.signalCode !== null) {
-      // The root already exited, so the command finished; only its pipes' close was lost. Never kill by its maybe-reused pid.
-      this.receive({ type: 'close', id: this.id, code: this.exitCode, signal: this.signalCode })
       return
     }
     if (!admitProcessTreeKill({ pid, site: 'worker-child-abandon', scope: 'win-taskkill-tree' })) {

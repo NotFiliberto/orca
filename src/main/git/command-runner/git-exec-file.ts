@@ -20,7 +20,11 @@ import {
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
 import { buildNetworkSshPolicyEnv } from './git-environment/git-ssh-policy-env'
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
-import { acquireGitAdmission, releaseGitAdmissionAfter } from './admission/git-subprocess-admission'
+import {
+  acquireGitAdmission,
+  releaseGitAdmissionAfter,
+  trackGitChildAdmission
+} from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
   gitCommandTimeoutMs
@@ -82,13 +86,13 @@ async function gitExecFileAsyncUnlocked(
       // Which Git ran: a project's runtime can route it into a distro whatever its cwd.
       span?.setAttribute('git.runs_in', gitRunsIn(resolved))
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
+      let admissionReturned: Promise<void> | null = null
       const capture = (
         command: ResolvedCommand
       ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> => {
-        let reportTerminated: () => void = () => {}
-        terminationState.current = new Promise<void>((resolve) => {
-          reportTerminated = resolve
-        })
+        const tracking = trackGitChildAdmission()
+        terminationState.current = tracking.terminated
+        admissionReturned = tracking.admissionReturned
         options.observeChildTermination?.(
           terminationState.current,
           classifyGitCommand(args) !== 'read'
@@ -105,7 +109,8 @@ async function gitExecFileAsyncUnlocked(
           terminationBarrier: options.terminationBarrier,
           admissionTier: options.admissionTier,
           spawnOnWorkerThread: options.spawnOnWorkerThread,
-          onChildTerminated: reportTerminated,
+          onChildTerminated: tracking.onChildTerminated,
+          onWorkerLost: tracking.onWorkerLost,
           ...(options.onStderr ? { onStderr: options.onStderr } : {}),
           ...(timeoutMs === undefined
             ? {}
@@ -178,7 +183,7 @@ async function gitExecFileAsyncUnlocked(
           options.canStart
         )
       } finally {
-        releaseGitAdmissionAfter(terminationState.current, grant)
+        releaseGitAdmissionAfter(admissionReturned, grant)
       }
     }
   )
@@ -256,12 +261,10 @@ async function gitExecFileAsyncBufferInSpan(
     span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
     span?.setAttribute('git.runs_in', gitRunsIn(resolved))
     const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
-    let termination: Promise<void> | null = null
+    let admissionReturned: Promise<void> | null = null
     try {
-      let reportTerminated: () => void = () => {}
-      termination = new Promise<void>((resolve) => {
-        reportTerminated = resolve
-      })
+      const tracking = trackGitChildAdmission()
+      admissionReturned = tracking.admissionReturned
       const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
         cwd: resolved.cwd,
         ownedPosixGroup: process.platform !== 'win32' && !resolved.wsl,
@@ -272,7 +275,8 @@ async function gitExecFileAsyncBufferInSpan(
         timeout: timeoutMs,
         env: untranslatedGitOutputEnv(options.env),
         admissionTier: options.admissionTier,
-        onChildTerminated: reportTerminated,
+        onChildTerminated: tracking.onChildTerminated,
+        onWorkerLost: tracking.onWorkerLost,
         ...(timeoutMs === undefined
           ? {}
           : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })
@@ -282,7 +286,7 @@ async function gitExecFileAsyncBufferInSpan(
       }
       return { stdout: readCapturedGitBuffer(stdout, resolved) }
     } finally {
-      releaseGitAdmissionAfter(termination, grant)
+      releaseGitAdmissionAfter(admissionReturned, grant)
     }
   })
 }
