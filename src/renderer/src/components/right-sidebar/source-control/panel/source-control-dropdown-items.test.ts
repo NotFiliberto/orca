@@ -6,60 +6,23 @@ import type {
 import { resolveDropdownItems } from './source-control-dropdown-items'
 import { CHANGED_STATES, STATES } from './source-control-dropdown-items.test-fixture'
 
-// Actions main's menu enabled in each state (read from main's unchanged row builders).
+// Actions main's menu could run in each state: enabled and not idle (Force Push and Fetch always
+// count), read from main's row builders. Rebase at ↓0 is idle, as UX asked (it would run nothing).
 const MAIN_ENABLED: Record<string, DropdownActionKind[]> = {
-  behindBase: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
-  upToDateWithBase: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
-  staged: [
-    'commit',
-    'commit_push',
-    'commit_sync',
-    'push',
-    'force_push',
-    'pull',
-    'fast_forward',
-    'sync',
-    'rebase_base',
-    'fetch'
-  ],
-  stagedWithoutMessage: [
-    'push',
-    'force_push',
-    'pull',
-    'fast_forward',
-    'sync',
-    'rebase_base',
-    'fetch'
-  ],
-  dirty: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
-  ahead: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
-  behindUpstream: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
+  behindBase: ['force_push', 'rebase_base', 'fetch'],
+  upToDateWithBase: ['force_push', 'fetch'],
+  staged: ['commit', 'commit_push', 'commit_sync', 'force_push', 'rebase_base', 'fetch'],
+  stagedWithoutMessage: ['force_push', 'rebase_base', 'fetch'],
+  dirty: ['force_push', 'rebase_base', 'fetch'],
+  ahead: ['push', 'force_push', 'sync', 'rebase_base', 'fetch'],
+  behindUpstream: ['force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
   diverged: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
-  justRebased: ['push', 'force_push', 'pull', 'fast_forward', 'rebase_base', 'fetch'],
+  justRebased: ['push', 'force_push', 'rebase_base', 'fetch'],
   unpublished: ['push', 'force_push', 'rebase_base', 'fetch', 'publish'],
-  pushedNoPr: [
-    'push',
-    'force_push',
-    'pull',
-    'fast_forward',
-    'sync',
-    'rebase_base',
-    'fetch',
-    'create_pr'
-  ],
-  aheadNoPr: [
-    'push',
-    'force_push',
-    'pull',
-    'fast_forward',
-    'sync',
-    'rebase_base',
-    'fetch',
-    'create_pr',
-    'push_create_pr'
-  ],
-  mergeConflict: ['push', 'force_push', 'pull', 'fast_forward', 'sync', 'rebase_base', 'fetch'],
-  rebaseConflict: ['rebase_base', 'fetch'],
+  pushedNoPr: ['force_push', 'rebase_base', 'fetch', 'create_pr'],
+  aheadNoPr: ['push', 'force_push', 'sync', 'rebase_base', 'fetch', 'create_pr', 'push_create_pr'],
+  mergeConflict: ['force_push', 'rebase_base', 'fetch'],
+  rebaseConflict: ['fetch'],
   busy: []
 }
 
@@ -89,7 +52,7 @@ function reachable(inputs: DropdownActionInputs): string[] {
   return [...kinds]
 }
 
-describe('resolveDropdownItems keeps every action main enables reachable', () => {
+describe('resolveDropdownItems keeps every action main could run reachable', () => {
   it.each(Object.keys(MAIN_ENABLED))('%s', (name) => {
     const inputs = STATES[name]
     // A paused rebase lists Abort/Continue instead of Rebase; the commit area is hidden then anyway.
@@ -108,16 +71,7 @@ describe('resolveDropdownItems keeps every action main enables reachable', () =>
 
 describe('resolveDropdownItems order and labels', () => {
   it('leads with Rebase and its behind count when the branch is behind its base', () => {
-    expect(menuRows(STATES.behindBase)).toEqual([
-      'rebase_base ↓299',
-      'push',
-      'pull',
-      'sync',
-      'fast_forward',
-      '---',
-      'force_push',
-      'fetch'
-    ])
+    expect(menuRows(STATES.behindBase)).toEqual(['rebase_base ↓299', '---', 'force_push', 'fetch'])
   })
 
   it('keeps Commit & Push / Sync but not the Commit the primary already runs', () => {
@@ -125,14 +79,14 @@ describe('resolveDropdownItems order and labels', () => {
       'commit_push',
       'commit_sync',
       'rebase_base ↓299',
-      'push',
-      'pull',
-      'sync',
-      'fast_forward',
       '---',
       'force_push',
       'fetch'
     ])
+  })
+
+  it('lists no idle rows once the branch is up to date, keeping Force Push and Fetch', () => {
+    expect(menuRows(STATES.upToDateWithBase)).toEqual(['force_push', 'fetch'])
   })
 
   it('drops the Push, Force Push or Create PR row that the primary button runs', () => {
@@ -153,12 +107,7 @@ describe('resolveDropdownItems owner-approved differences from main', () => {
   })
 
   it('hides Pull, Sync, Fast-forward and Push after Orca rebased, keeping Force Push', () => {
-    expect(menuRows(CHANGED_STATES.orcaRebased)).toEqual([
-      'rebase_base',
-      '---',
-      'force_push Replaces ↓2',
-      'fetch'
-    ])
+    expect(menuRows(CHANGED_STATES.orcaRebased)).toEqual(['force_push Replaces ↓2', 'fetch'])
   })
 
   it('limits a paused rebase to Abort, Continue once resolved, and Fetch', () => {

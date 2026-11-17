@@ -193,6 +193,9 @@ function primaryDropdownKind(
   }
 }
 
+// Force Push and Fetch are deliberate escape hatches, so an idle state does not hide them.
+const ALWAYS_LISTED_WHEN_ENABLED = new Set<DropdownActionKind>(['force_push', 'fetch'])
+
 // After an Orca rebase: pulling merges the old copies back and a plain push is rejected.
 const HIDDEN_AFTER_ORCA_REBASE = new Set<DropdownActionKind>([
   'pull',
@@ -249,16 +252,18 @@ export function resolveDropdownItems(
     return [...rebaseEntries, { kind: 'separator', id: 'before-fetch' }, lockedFetch]
   }
 
-  // Every action main enables stays reachable: only disabled rows, the primary's own row, and
+  // Every action that can run stays reachable: disabled and idle rows, the primary's own row, and
   // (after Orca's rebase over an integrated upstream) Pull/Sync/FF/Push leave the menu.
   const isRunnable = (item: DropdownItem): boolean =>
     !isPullRequestOperationActive &&
     !item.disabled &&
     item.kind !== hiddenPrimaryKind &&
-    !(inputs.suppressPullAfterRebase && HIDDEN_AFTER_ORCA_REBASE.has(item.kind))
+    !(inputs.suppressPullAfterRebase && HIDDEN_AFTER_ORCA_REBASE.has(item.kind)) &&
+    // Idle rows (nothing to push, pull or rebase) would run nothing, so they are not listed.
+    (!item.idle || ALWAYS_LISTED_WHEN_ENABLED.has(item.kind))
   // Counts and warnings stay; plain notes like "Up to date" only explained a row's state.
   const withoutReasonHint = (item: DropdownItem): DropdownItem =>
-    item.statusTone ? item : { ...item, status: undefined }
+    item.statusTone ? item : { ...item, status: undefined, idle: undefined }
 
   const primaryRows = [
     commit,

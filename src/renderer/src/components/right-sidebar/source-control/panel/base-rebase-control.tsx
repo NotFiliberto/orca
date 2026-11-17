@@ -36,10 +36,14 @@ function ButtonWithReason({
           aria-describedby={reasonId}
         >
           {children(reasonId)}
+          {/* Always in the DOM: the tooltip body only exists while it is open. */}
+          <span id={reasonId} className="sr-only">
+            {reason}
+          </span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        <span id={reasonId}>{reason}</span>
+        {reason}
       </TooltipContent>
     </Tooltip>
   )
@@ -172,7 +176,8 @@ export function RebasePausedStrip({
           {(describedBy) => (
             <Button
               type="button"
-              variant="outline"
+              // Once nothing is left to resolve, Continue is the step to take.
+              variant={unresolvedCount === 0 && continueState === 'ready' ? 'default' : 'outline'}
               size="xs"
               disabled={busy || unresolvedCount > 0 || continueState !== 'ready'}
               aria-describedby={describedBy}
