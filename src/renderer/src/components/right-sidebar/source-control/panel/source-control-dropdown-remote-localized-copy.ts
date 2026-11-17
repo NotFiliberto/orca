@@ -152,6 +152,12 @@ export function localizedRemoteCopy(t: Translate = translate): RemoteDropdownCop
       'auto.components.right.sidebar.source.control.dropdown.items.titleBranchUpToDate',
       'Branch is up to date'
     ),
+    rebaseFromNamedBase: (baseRef) =>
+      t(
+        'auto.components.right.sidebar.source.control.dropdown.items.rebaseFromNamedBase',
+        'Rebase from {{baseRef}}',
+        { baseRef }
+      ),
     rebaseOntoNamedBase: (baseRef) =>
       t(
         'auto.components.right.sidebar.source.control.dropdown.items.rebaseOntoNamedBase',
@@ -169,6 +175,10 @@ export function localizedRemoteCopy(t: Translate = translate): RemoteDropdownCop
     rebaseCommitOrStashFirst: t(
       'auto.components.right.sidebar.source.control.dropdown.items.rebaseCommitOrStashFirst',
       'Commit or stash changes first'
+    ),
+    rebaseDirtyHint: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.rebaseDirtyHint',
+      'Try rebasing; git may require committing or stashing local changes first'
     ),
     rebaseWithLatestFrom: (baseRef) =>
       t(
@@ -227,6 +237,10 @@ export function localizedRemoteCopy(t: Translate = translate): RemoteDropdownCop
     statusPublished: t(
       'auto.components.right.sidebar.source.control.dropdown.items.statusPublished',
       'Published'
+    ),
+    statusStashFirst: t(
+      'auto.components.right.sidebar.source.control.dropdown.items.statusStashFirst',
+      'Stash first'
     ),
     statusReplaces: (behind) =>
       t(

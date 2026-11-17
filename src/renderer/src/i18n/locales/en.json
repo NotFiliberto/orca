@@ -15546,7 +15546,10 @@
                   "rebaseOntoNamedBase": "Rebase onto {{base}}",
                   "rebaseCommitOrStashFirst": "Commit or stash changes first",
                   "continueRebase": "Continue rebase",
-                  "titleContinueRebase": "Continue the paused rebase"
+                  "titleContinueRebase": "Continue the paused rebase",
+                  "rebaseFromNamedBase": "Rebase from {{baseRef}}",
+                  "rebaseDirtyHint": "Try rebasing; git may require committing or stashing local changes first",
+                  "statusStashFirst": "Stash first"
                 }
               },
               "primary": {

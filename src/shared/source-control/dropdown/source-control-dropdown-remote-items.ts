@@ -33,7 +33,7 @@ export function buildRemoteDropdownItems(
     rebaseBaseRef,
     rebaseBehindCount,
     rebaseBlockedByDirtyTree,
-    conflictOperation,
+    hasDirtyLocalChanges,
     globalBusy,
     upstreamLoading,
     hasUpstream,
@@ -217,27 +217,29 @@ export function buildRemoteDropdownItems(
   const hasRemoteBaseRef = rebaseBaseLabel?.includes('/') === true
   const rebase: DropdownItem = {
     kind: 'rebase_base',
-    label: rebaseBaseLabel ? copy.rebaseOntoNamedBase(rebaseBaseLabel) : copy.rebaseFromBase,
+    label: rebaseBaseLabel
+      ? (copy.rebaseOntoNamedBase ?? copy.rebaseFromNamedBase)(rebaseBaseLabel)
+      : copy.rebaseFromBase,
     title: ((): string => {
       if (!rebaseBaseLabel || !hasRemoteBaseRef) {
         return copy.rebaseChooseRemoteBase
       }
       if (rebaseBlockedByDirtyTree) {
-        return copy.rebaseCommitOrStashFirst
+        return copy.rebaseCommitOrStashFirst ?? copy.rebaseDirtyHint
+      }
+      if (hasDirtyLocalChanges) {
+        return copy.rebaseDirtyHint
       }
       return copy.rebaseWithLatestFrom(rebaseBaseLabel)
     })(),
     ...(rebaseBehindCount !== null && rebaseBehindCount > 0
       ? { status: formatBehindStatus(rebaseBehindCount), statusTone: 'warning' as const }
-      : {}),
+      : rebaseBaseLabel && hasRemoteBaseRef && hasDirtyLocalChanges
+        ? { status: copy.statusStashFirst }
+        : {}),
     // A known zero is a no-op; an unmeasured base stays available because the rebase fetches first.
     idle: rebaseBehindCount === 0,
-    disabled:
-      globalBusy ||
-      !rebaseBaseRef ||
-      !hasRemoteBaseRef ||
-      rebaseBlockedByDirtyTree ||
-      conflictOperation === 'rebase'
+    disabled: globalBusy || !rebaseBaseRef || !hasRemoteBaseRef || rebaseBlockedByDirtyTree
   }
 
   const fetch: DropdownItem = {

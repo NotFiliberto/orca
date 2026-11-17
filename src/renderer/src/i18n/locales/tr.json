@@ -14643,7 +14643,9 @@
                   "rebaseOntoNamedBase": "{{base}} üzerine rebase",
                   "rebaseCommitOrStashFirst": "Önce değişiklikleri commit edin veya stash’leyin",
                   "continueRebase": "Rebase’e devam et",
-                  "titleContinueRebase": "Duraklatılmış rebase’e devam et"
+                  "titleContinueRebase": "Duraklatılmış rebase’e devam et",
+                  "rebaseFromNamedBase": "{{baseRef}} üzerinden rebase et",
+                  "rebaseDirtyHint": "Rebase etmeyi deneyin; git önce yerel değişiklikleri commit'lemenizi veya stash etmenizi gerektirebilir"
                 }
               },
               "primary": {

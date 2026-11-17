@@ -14915,7 +14915,9 @@
                   "rebaseOntoNamedBase": "Rebase на {{base}}",
                   "rebaseCommitOrStashFirst": "Сначала закоммитьте или спрячьте изменения",
                   "continueRebase": "Продолжить rebase",
-                  "titleContinueRebase": "Продолжить приостановленный rebase"
+                  "titleContinueRebase": "Продолжить приостановленный rebase",
+                  "rebaseFromNamedBase": "Перебазировать на {{baseRef}}",
+                  "rebaseDirtyHint": "Попробуйте перебазирование. Git может сначала потребовать коммит или сохранение локальных изменений в stash."
                 }
               },
               "primary": {

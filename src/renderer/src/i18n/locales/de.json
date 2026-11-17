@@ -14496,7 +14496,9 @@
                   "rebaseOntoNamedBase": "Rebase auf {{base}}",
                   "rebaseCommitOrStashFirst": "Committe oder stashe zuerst die Änderungen",
                   "continueRebase": "Rebase fortsetzen",
-                  "titleContinueRebase": "Angehaltenen Rebase fortsetzen"
+                  "titleContinueRebase": "Angehaltenen Rebase fortsetzen",
+                  "rebaseFromNamedBase": "Auf {{baseRef}} rebasen",
+                  "rebaseDirtyHint": "Rebase versuchen; git erfordert eventuell zuvor das Committen oder Stashen lokaler Änderungen"
                 }
               },
               "primary": {

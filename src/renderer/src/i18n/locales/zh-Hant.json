@@ -14299,7 +14299,9 @@
                   "rebaseOntoNamedBase": "重定基底到 {{base}}",
                   "rebaseCommitOrStashFirst": "請先提交或暫存變更",
                   "continueRebase": "繼續重定基底",
-                  "titleContinueRebase": "繼續已暫停的重定基底"
+                  "titleContinueRebase": "繼續已暫停的重定基底",
+                  "rebaseFromNamedBase": "以 {{baseRef}} 為基準進行變基",
+                  "rebaseDirtyHint": "嘗試變基；git 可能要求先提交或儲藏本機變更"
                 }
               },
               "primary": {

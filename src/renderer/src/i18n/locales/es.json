@@ -14156,7 +14156,9 @@
                   "rebaseOntoNamedBase": "Hacer rebase sobre {{base}}",
                   "rebaseCommitOrStashFirst": "Haz commit o stash de los cambios primero",
                   "continueRebase": "Continuar rebase",
-                  "titleContinueRebase": "Continuar el rebase en pausa"
+                  "titleContinueRebase": "Continuar el rebase en pausa",
+                  "rebaseFromNamedBase": "Rebase desde {{baseRef}}",
+                  "rebaseDirtyHint": "Intenta hacer rebase; git puede requerir hacer commit o stash de los cambios locales primero"
                 }
               },
               "primary": {

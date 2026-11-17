@@ -14608,7 +14608,10 @@
                   "rebaseOntoNamedBase": "{{base}} にリベース",
                   "rebaseCommitOrStashFirst": "先に変更をコミットまたはスタッシュしてください",
                   "continueRebase": "リベースを続行",
-                  "titleContinueRebase": "一時停止中のリベースを続行"
+                  "titleContinueRebase": "一時停止中のリベースを続行",
+                  "rebaseFromNamedBase": "{{baseRef}} からリベース",
+                  "rebaseDirtyHint": "リベースを試行します。git が先にローカルの変更のコミットまたは stash を要求する場合があります",
+                  "statusStashFirst": "先に stash"
                 }
               },
               "primary": {
