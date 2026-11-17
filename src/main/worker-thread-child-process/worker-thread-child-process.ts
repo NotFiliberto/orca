@@ -144,7 +144,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
     }
   }
 
-  /** The worker is gone: a native-like child closes only once a tree kill proves it ended, so callers keep their locks while it may still run; others keep the error-only contract. */
+  /** The worker is gone: a running native-like child closes only once a tree kill proves it ended, so callers keep their locks while it may still run; others keep the error-only contract. */
   abandon(message: string): void {
     const pid = this.pid
     if (this.nativeLike && !this.closed && pid === undefined) {
@@ -154,14 +154,12 @@ export class WorkerThreadChildProcess extends EventEmitter {
       return
     }
     this.emitErrorIfObserved({ message })
-    // An exited root's pid may be reused.
-    if (
-      !this.nativeLike ||
-      this.closed ||
-      pid === undefined ||
-      this.exitCode !== null ||
-      this.signalCode !== null
-    ) {
+    if (!this.nativeLike || this.closed || pid === undefined) {
+      return
+    }
+    if (this.exitCode !== null || this.signalCode !== null) {
+      // The root already exited, so the command finished; only its pipes' close was lost. Never kill by its maybe-reused pid.
+      this.receive({ type: 'close', id: this.id, code: this.exitCode, signal: this.signalCode })
       return
     }
     if (!admitProcessTreeKill({ pid, site: 'worker-child-abandon', scope: 'win-taskkill-tree' })) {

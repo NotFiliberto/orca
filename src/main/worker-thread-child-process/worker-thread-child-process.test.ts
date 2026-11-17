@@ -277,6 +277,27 @@ describe('WorkerThreadChildProcessHost when the worker dies', () => {
     await expect(closed).resolves.toEqual([-1, null])
     expect(errors).toEqual(['Child process worker failed: boom'])
   })
+
+  it('closes a child whose root already exited when the worker dies before its close', async () => {
+    const worker = Object.assign(new EventEmitter(), {
+      postMessage: () => {},
+      unref: () => {},
+      terminate: async () => 0
+    })
+    const host = new WorkerThreadChildProcessHost(() => worker)
+    const child = host.trySpawn({ program: process.execPath, args: ['-e', ''] })
+    if (!child) {
+      throw new Error('worker launch was refused')
+    }
+    child.on('error', () => {})
+    const closed = waitForClose(child)
+
+    worker.emit('message', { type: 'spawn', id: 1, pid: 4242 })
+    worker.emit('message', { type: 'exit', id: 1, code: 0, signal: null })
+    worker.emit('exit', 1)
+
+    await expect(closed).resolves.toEqual([0, null])
+  })
 })
 
 // Real thread death closes child pipes; abandoned probes depend on that graceful stop instead of PID-addressed killing.
