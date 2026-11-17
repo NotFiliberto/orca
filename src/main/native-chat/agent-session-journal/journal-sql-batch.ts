@@ -49,7 +49,8 @@ export class JournalSqlBatch {
   async run<Command, Value>(
     commands: readonly Command[],
     apply: (command: Command) => Value | Promise<Value>,
-    durability: 'normal' | 'full' = 'normal'
+    durability: 'normal' | 'full' = 'normal',
+    gate = true
   ): Promise<JournalSqlBatchResult<Value>> {
     if (this.failure) {
       throw new JournalSqlBatchError('not-dispatched', this.failure)
@@ -63,7 +64,9 @@ export class JournalSqlBatch {
     let committing = false
     let failed: JournalSqlBatchError | undefined
     try {
-      await this.checkpoint?.beforeWrite()
+      if (gate) {
+        await this.checkpoint?.beforeWrite()
+      }
       if (durability !== 'normal') {
         this.db.pragma('synchronous=FULL')
       }

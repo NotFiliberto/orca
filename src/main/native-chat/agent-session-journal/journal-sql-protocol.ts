@@ -7,6 +7,7 @@ import type { JournalSqlMaintenance, JournalSqlMaintenanceResult } from './journ
 export type JournalSqlRequest = {
   id: number
   batch?: { sessionId: string; steps: number; bytes: number }
+  urgent?: true
   command:
     | { type: 'write'; command: JournalWriterCommand }
     | { type: 'effects'; effects: readonly JournalWriterEffect[] }
