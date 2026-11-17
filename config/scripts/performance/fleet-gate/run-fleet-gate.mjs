@@ -478,7 +478,30 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
     if (agents.panes === 0 || agents.failed > 0) {
       result.notes.push(`agent statuses: ${JSON.stringify(agents)}`)
     }
+    await app.evaluate(async () => {
+      const inspector = process.getBuiltinModule('node:inspector')
+      const session = new inspector.Session()
+      session.connect()
+      globalThis.__fleetGateSettleProfiler = session
+      const post = (method, params) => new Promise((resolve, reject) => session.post(method, params, (error, result) => (error ? reject(error) : resolve(result))))
+      await post('Profiler.enable')
+      await post('Profiler.setSamplingInterval', { interval: 1000 })
+      await post('Profiler.start')
+    })
     await new Promise((resolve) => setTimeout(resolve, options.settleMs))
+    const settleProfile = await app.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const session = globalThis.__fleetGateSettleProfiler
+          session.post('Profiler.stop', (error, result) => {
+            session.disconnect()
+            resolve(error ? null : JSON.stringify(result.profile))
+          })
+        })
+    )
+    if (settleProfile) {
+      fs.writeFileSync(path.join(outDir, `${label}-${Date.now()}-settle-main.cpuprofile`), settleProfile)
+    }
     result.census = { ...(await readFleetCensus(page)), agentPanes: agents.panes }
     await page.screenshot({ path: path.join(outDir, `${label}-${Date.now()}.png`) }).catch(() => {})
     for (const name of options.scenarios) {
