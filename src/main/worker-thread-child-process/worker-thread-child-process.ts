@@ -2,7 +2,6 @@ import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import type { ChildProcess } from 'node:child_process'
 import type { Worker } from 'node:worker_threads'
-import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
 import { startWindowsTreeKill } from '@orca/process-host/windows-tree-kill'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
@@ -328,25 +327,4 @@ export function spawnOffMainThreadOnWindows(
   }
   // The worker's env is a snapshot from its start; pass the caller's view explicitly.
   return sharedChildProcessHost().trySpawn({ ...spec, env: spec.env ?? process.env })
-}
-
-/** runProcess `launch` for Windows: plain piped specs start on the worker; any other stdio or flag keeps the in-thread spawn. */
-export function launchProcessSpecOffMainThreadOnWindows(spec: ProcessSpec): ChildProcess | null {
-  const piped =
-    spec.stdio === undefined ||
-    spec.stdio === 'pipe' ||
-    (Array.isArray(spec.stdio) &&
-      spec.stdio.length === 3 &&
-      spec.stdio.every((entry) => entry === 'pipe'))
-  if (!piped || spec.detached || spec.windowsVerbatimArguments || spec.serialization) {
-    return null
-  }
-  const child = spawnOffMainThreadOnWindows({
-    program: spec.program,
-    args: [...(spec.args ?? [])],
-    cwd: spec.cwd,
-    env: spec.env
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in carries the piped surface runProcess and tree termination use: stdio events, stdin, pid, kill, exit and close.
-  return child as unknown as ChildProcess | null
 }

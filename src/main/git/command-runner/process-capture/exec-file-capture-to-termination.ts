@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { launchProcessSpecOffMainThreadOnWindows } from '../../../worker-thread-child-process/worker-thread-child-process'
+import { launchProcessSpecOffMainThreadOnWindows } from '../../../worker-thread-child-process/process-spec-worker-launch'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import type { WslProcessGroupTermination } from './wsl-process-group-termination'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
