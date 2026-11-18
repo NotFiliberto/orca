@@ -465,7 +465,16 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
   const label = `${arm}-${sha.slice(0, 11)}`
   const { app, page, close, stderrTail, child } = await launchCopy({ buildDir, runDir, userDataDir, label, outDir })
   try {
-    const probeState = await installMainProbeIn(app).catch((error) => {
+    const probeState = await installMainProbeIn(app)
+      .catch(async (error) => {
+        if (!/garbage collected/.test(String(error))) {
+          throw error
+        }
+        console.log(`[fleet-gate] ${label} main probe install hit a Playwright GC flake; retrying once`)
+        await new Promise((resolve) => setTimeout(resolve, 2_000))
+        return installMainProbeIn(app)
+      })
+      .catch((error) => {
       console.log(`[fleet-gate] ${label} main probe failed; exit ${child.exitCode} signal ${child.signalCode}; stderr tail:\n${stderrTail.join('\n')}`)
       throw error
     })
