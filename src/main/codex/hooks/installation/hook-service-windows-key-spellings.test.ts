@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import type * as ConfigTomlTrust from '../../trust/identity/codex-trust-identity'
 import type * as TrustDerivation from '../../trust/hooks/codex-hook-trust-derivation'
+import { upsertHookTrustContent } from '../../trust/toml/config-toml-hook-trust-edit'
 import { setupCodexHookHomes } from './hook-service-test-harness'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
@@ -84,5 +85,55 @@ describe('a managed home on Windows', () => {
     const repaired = readFileSync(tomlPath, 'utf-8')
     expect(repaired).not.toContain(legacy)
     expect(repaired).toContain(canonical)
+  })
+
+  it('PROBE', async () => {
+    lookupInternals.resetForTesting()
+    startCodexHookHashLookup(Promise.resolve())
+    const systemHome = join(homes.tmpHome, '.codex')
+    const systemHooksPath = join(systemHome, 'hooks.json')
+    mkdirSync(systemHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'user-hook' }] }]
+        }
+      })
+    )
+    const trusted = upsertHookTrustContent('', [
+      {
+        sourcePath: systemHooksPath,
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'user-hook',
+        matcher: 'Bash',
+        enabled: true
+      }
+    ])
+    writeFileSync(
+      join(systemHome, 'config.toml'),
+      trusted.replace(/trusted_hash = "[^"]+"/, 'trusted_hash = "sha256:stale"')
+    )
+    const out: string[] = []
+    out.push('SYSTEM0', readFileSync(join(systemHome, 'config.toml'), 'utf-8'))
+    const current = /trusted_hash = "([^"]+)"/.exec(trusted)![1]!
+    out.push(`CURRENT ${current}`)
+    const service = new CodexHookService()
+    out.push(`INSTALL1 ${(await service.install()).state}`)
+    const tomlPath = join(homes.userDataDir, 'codex-runtime-home', 'home', 'config.toml')
+    const r1 = readFileSync(tomlPath, 'utf-8')
+    out.push('RUNTIME1', r1)
+    const r1b = r1.replace(
+      /(\[hooks\.state\.'C:\\[^\n]*pre_tool_use[^\n]*\n(?:(?!\[)[^\n]*\n?)*)/g,
+      (m) => m.replace('sha256:stale', current)
+    )
+    writeFileSync(tomlPath, r1b)
+    out.push('RUNTIME1b', r1b)
+    out.push(`INSTALL2 ${(await service.install()).state}`)
+    out.push('RUNTIME2', readFileSync(tomlPath, 'utf-8'))
+    out.push('SYSTEM2', readFileSync(join(systemHome, 'config.toml'), 'utf-8'))
+    throw new Error(`PROBEOUT\n${out.join('\n')}`)
   })
 })
