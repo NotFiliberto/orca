@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events'
-import { existsSync } from 'node:fs'
 import type { ChildProcess } from 'node:child_process'
 import type { Worker } from 'node:worker_threads'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
@@ -322,10 +321,7 @@ function defaultWorkerFactory(): Worker {
     currentWorkerEntryLayout(__dirname),
     WORKER_ENTRY_FILENAME
   )
-  // Reject missing worker synchronously so spawning fails closed instead of awaiting impossible readiness.
-  if (!existsSync(workerPath)) {
-    throw new Error(`Child process worker entry not found: ${workerPath}`)
-  }
+  // A missing or unloadable entry dies before serving; brokenBeforeServing then routes launches in-thread.
   return spawnWorkerThread(workerPath, { name: 'orca-child-process-spawner' })
 }
 
