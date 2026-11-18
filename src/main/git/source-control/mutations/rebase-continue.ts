@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import type {
   ContinueRebaseAction,
+  ContinueRebaseRequest,
   ContinueRebaseResult,
   RebaseStopToken
 } from '../../../../shared/git/status/git-status-types'
@@ -16,6 +17,13 @@ import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
 import { resolveGitDir } from '../resolve-git-dir'
 import { AUTOSTASH_REAPPLY_CONFLICT, detectConflictOperation } from './git-conflict-operation'
 import { forgetOrcaRebaseProvenance, takeOrcaRebaseProvenance } from './orca-rebase-provenance'
+import {
+  backUpEditsBeforeAbort,
+  joinGitOutput,
+  readGitErrorOutput,
+  readTrackedPathsAbortWouldReset,
+  restoreAbortBackup
+} from './rebase-abort-backup'
 
 // Git's own words for a pick the resolution left empty (apply backend; merge backend in older Git).
 const EMPTY_PICK_OUTPUT = /No changes - did you forget to use 'git add'|nothing to commit/i
@@ -28,16 +36,18 @@ const EMPTY_PICK_OUTPUT = /No changes - did you forget to use 'git add'|nothing 
 export async function continueRebase(
   worktreePath: string,
   action: ContinueRebaseAction = 'continue',
-  options: GitRuntimeOptions & { expected?: RebaseStopToken; expectedDiscards?: string[] } = {}
+  options: GitRuntimeOptions & ContinueRebaseRequest = {}
 ): Promise<ContinueRebaseResult> {
-  const { expected, expectedDiscards, ...gitOptions } = options
+  const { expected, expectedDiscards, backup, ...gitOptions } = options
   return runWithGitWorktreeOperationLock(worktreePath, gitOptions.signal, () =>
     runWithGitReadCacheInvalidation(() =>
       action === 'inspect'
         ? inspectRebaseStop(worktreePath, gitOptions)
         : action === 'abort'
           ? abortConfirmedRebase(worktreePath, expected, expectedDiscards, gitOptions)
-          : continueRebaseUnlocked(worktreePath, expected, gitOptions)
+          : action === 'restore'
+            ? restoreAbortBackup(worktreePath, backup, gitOptions)
+            : continueRebaseUnlocked(worktreePath, expected, gitOptions)
     )
   )
 }
@@ -59,29 +69,10 @@ async function inspectRebaseStop(
   }
 }
 
-/** Every tracked path git rebase --abort would reset (staged or not); null when Git cannot say. */
-async function readTrackedPathsAbortWouldReset(
-  worktreePath: string,
-  options: GitRuntimeOptions
-): Promise<string[] | null> {
-  try {
-    const { stdout } = await gitExecFileAsync(
-      ['diff', '--name-only', '--no-renames', 'HEAD', '--'],
-      gitOptionsForWorktree(worktreePath, options)
-    )
-    return stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .sort()
-  } catch {
-    return null
-  }
-}
-
 /**
- * Abort only what the user confirmed: the same stop and the same set of paths to discard, checked
- * under the lock that runs it. Anything else returns the fresh set so the dialog asks again.
+ * Abort is lossless: under the lock that runs it, tracked edits are first pinned as a backup, and
+ * no backup means no abort. A stop or path set the user confirmed must also still hold, otherwise
+ * the fresh set returns so the dialog asks again; without that evidence the backup alone covers it.
  */
 async function abortConfirmedRebase(
   worktreePath: string,
@@ -95,17 +86,21 @@ async function abortConfirmedRebase(
   const stop = await readRebaseStopToken(worktreePath, options)
   const discards = await readTrackedPathsAbortWouldReset(worktreePath, options)
   if (
-    !expected ||
-    !expectedDiscards ||
-    discards === null ||
-    !sameStop(expected, stop) ||
-    discards.join('\n') !== [...expectedDiscards].sort().join('\n')
+    (expected && !sameStop(expected, stop)) ||
+    (expectedDiscards &&
+      (discards === null || discards.join('\0') !== [...expectedDiscards].sort().join('\0')))
   ) {
     return { outcome: 'abort_changed', stop, ...(discards ? { abortWouldDiscard: discards } : {}) }
   }
+  let backup: string | null
+  try {
+    backup = await backUpEditsBeforeAbort(worktreePath, options)
+  } catch (error) {
+    return { outcome: 'failed', message: readGitErrorOutput(error), stop }
+  }
   forgetOrcaRebaseProvenance(worktreePath)
   await gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
-  return { outcome: 'aborted' }
+  return { outcome: 'aborted', ...(backup ? { backup } : {}) }
 }
 
 async function continueRebaseUnlocked(
@@ -122,8 +117,9 @@ async function continueRebaseUnlocked(
     addWslEnvKeys(env, ['GIT_EDITOR'])
   }
   const branch = await readRebasingBranch(worktreePath, options)
-  // Read last, right before Git runs. Orca serializes its own steps with the lock, but an external
-  // Git in the same worktree could still swap the run in the moment between this read and the spawn.
+  // Contract: the token is re-read under the worktree lock immediately before the spawn, so no Orca
+  // action can move the rebase in between. A Git process outside Orca acting inside that window is
+  // out of scope: Git has no compare-and-swap on rebase state.
   const before = await readRebaseStopToken(worktreePath, options)
   if (!expected || !sameStop(expected, before)) {
     return { outcome: 'stale', stop: before, branch }
@@ -254,6 +250,14 @@ export async function readRebasingBranch(
   return null
 }
 
+/** Which rebase directory exists and its inode/birth time; null when no rebase is in progress. */
+export async function readRebaseRunIdentity(
+  worktreePath: string,
+  options: GitRuntimeOptions
+): Promise<string | null> {
+  return readRebaseDirIdentity(await resolveGitDir(worktreePath, options))
+}
+
 async function readRebaseDirIdentity(gitDir: string): Promise<string | null> {
   for (const dir of ['rebase-merge', 'rebase-apply']) {
     try {
@@ -309,25 +313,4 @@ async function gitDiffIsQuiet(
   } catch {
     return false
   }
-}
-
-function joinGitOutput(stdout: unknown, stderr: unknown): string {
-  return [stdout, stderr]
-    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
-    .map((part) => part.trim())
-    .join('\n')
-}
-
-// Keep Git's diagnostics; spawn failures carry only an Error message.
-function readGitErrorOutput(error: unknown): string {
-  if (typeof error === 'object' && error !== null) {
-    const output = joinGitOutput(
-      'stdout' in error ? error.stdout : undefined,
-      'stderr' in error ? error.stderr : undefined
-    )
-    if (output) {
-      return output
-    }
-  }
-  return error instanceof Error ? error.message : String(error)
 }

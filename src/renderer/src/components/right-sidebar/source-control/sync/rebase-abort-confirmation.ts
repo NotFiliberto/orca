@@ -83,36 +83,30 @@ export function rebaseAbortEvidence(result: ContinueRebaseResult): RebaseAbortEv
 }
 
 /**
- * Abort resets every tracked path, so the dialog names them (or says it cannot tell), and the host
- * aborts only if the stop and that exact set are unchanged under its lock; otherwise ask again.
+ * Abort resets every tracked path, so the dialog names them (or says it cannot tell). The host
+ * backs those edits up before aborting, and refuses if the confirmed stop or set changed; then ask
+ * again. Unknown evidence sends no binding: the backup alone keeps the edits.
  */
 export async function confirmAndAbortRebase({
   inspect,
   confirm,
   beginAbort,
-  abortConfirmed,
-  abortUnverified
+  abort
 }: {
   inspect: () => Promise<RebaseAbortEvidence>
   confirm: (request: AbortConfirmRequest) => Promise<boolean>
   beginAbort: () => void
-  abortConfirmed: (stop: RebaseStopToken, discards: string[]) => Promise<ContinueRebaseResult>
-  // Only after the user accepted "edits may be lost", for hosts that cannot verify.
-  abortUnverified: () => Promise<void>
-}): Promise<'aborted' | 'cancelled'> {
+  abort: (stop?: RebaseStopToken, discards?: string[]) => Promise<ContinueRebaseResult>
+}): Promise<ContinueRebaseResult | 'cancelled'> {
   let evidence = await inspect()
   for (let attempt = 0; attempt < 3; attempt++) {
     if (!(await confirm(abortRebaseDialog(evidence?.discards ?? null)))) {
       return 'cancelled'
     }
     beginAbort()
-    if (!evidence) {
-      await abortUnverified()
-      return 'aborted'
-    }
-    const result = await abortConfirmed(evidence.stop, evidence.discards)
+    const result = evidence ? await abort(evidence.stop, evidence.discards) : await abort()
     if (result.outcome !== 'abort_changed') {
-      return 'aborted'
+      return result
     }
     evidence = rebaseAbortEvidence(result)
   }

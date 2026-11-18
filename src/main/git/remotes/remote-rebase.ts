@@ -21,6 +21,7 @@ import {
 import { recordOrcaRebaseProvenance } from '../source-control/mutations/orca-rebase-provenance'
 import {
   readRebaseRunFiles,
+  readRebaseRunIdentity,
   readRebaseStopToken,
   readRebasingBranch
 } from '../source-control/mutations/rebase-continue'
@@ -50,6 +51,8 @@ async function gitPullRebaseFromBaseUnlocked(
     let integratedUpstreamOid: string | null = null
     // What this run will write as onto/orig-head, so a paused rebase can be proven to be ours.
     let ownRun: { onto: string; origHead: string } | null = null
+    // A rebase directory that already existed was not created by this run.
+    let rebaseDirAbsentBeforeSpawn = false
     try {
       const source = await resolveGitRemoteRebaseSource(
         (args) => gitExecFileAsync(args, operationOptions),
@@ -99,6 +102,7 @@ async function gitPullRebaseFromBaseUnlocked(
       // Pull hiding is only safe when the upstream tip is already in the branch being rebased.
       integratedUpstreamOid = hasHead ? await readIntegratedUpstreamOid(operationOptions) : null
       ownRun = integratedUpstreamOid ? await readOwnRunIdentity(rebaseRef, operationOptions) : null
+      rebaseDirAbsentBeforeSpawn = (await readRebaseRunIdentity(worktreePath, options)) === null
       const { stdout, stderr } = await gitExecFileAsync(
         hasHead
           ? forkPoint
@@ -113,7 +117,7 @@ async function gitPullRebaseFromBaseUnlocked(
         ...(integratedUpstreamOid ? { integratedUpstreamOid } : {})
       }
     } catch (error) {
-      if (integratedUpstreamOid && ownRun) {
+      if (integratedUpstreamOid && ownRun && rebaseDirAbsentBeforeSpawn) {
         await rememberPausedOrcaRebase(worktreePath, integratedUpstreamOid, ownRun, options)
       }
       throw new Error(normalizeGitErrorMessage(error, 'pull'), { cause: error })
@@ -170,7 +174,8 @@ async function readIntegratedUpstreamOid(
   }
 }
 
-// A conflict stop keeps the proof with this run, so only its own Continue can claim it.
+// A conflict stop keeps the proof with the run this spawn created (no rebase directory before it),
+// keyed by the directory identity observed now, so only that run's Continue can claim it.
 async function rememberPausedOrcaRebase(
   worktreePath: string,
   integratedUpstreamOid: string,
@@ -187,9 +192,10 @@ async function rememberPausedOrcaRebase(
     if (run.onto !== ownRun.onto || run.origHead !== ownRun.origHead) {
       return
     }
+    const observed = await readRebaseRunIdentity(worktreePath, readOptions)
     const branch = await readRebasingBranch(worktreePath, readOptions)
     const { incarnation } = await readRebaseStopToken(worktreePath, readOptions)
-    if (branch && incarnation) {
+    if (branch && observed && incarnation?.startsWith(`${observed}:`)) {
       recordOrcaRebaseProvenance(worktreePath, { branch, integratedUpstreamOid, incarnation })
     }
   } catch {

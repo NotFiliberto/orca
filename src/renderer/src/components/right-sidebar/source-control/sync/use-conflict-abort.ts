@@ -4,10 +4,7 @@ import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
-import {
-  abortRuntimeGitMerge,
-  abortRuntimeGitRebase
-} from '@/runtime/source-control/git/runtime-git-sync-client'
+import { abortRuntimeGitMerge } from '@/runtime/source-control/git/runtime-git-sync-client'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { AbortConflictOperation } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -16,11 +13,13 @@ import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
 import {
   confirmAndAbortRebase,
   rebaseAbortEvidence,
+  type AbortConfirmRequest,
   type RebaseAbortEvidence
 } from './rebase-abort-confirmation'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { continueRuntimeGitRebase } from '@/runtime/source-control/git/runtime-git-rebase-client'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
+import { showRebaseAbortBackupToast } from './rebase-abort-backup-toast'
 
 // An older or unreachable host cannot prove what Abort resets: that evidence is unknown, never clean.
 async function inspectRebaseAbort(context: RuntimeGitContext): Promise<RebaseAbortEvidence> {
@@ -28,6 +27,31 @@ async function inspectRebaseAbort(context: RuntimeGitContext): Promise<RebaseAbo
     return rebaseAbortEvidence(await continueRuntimeGitRebase(context, 'inspect'))
   } catch {
     return null
+  }
+}
+
+/** Throws when the host refused (e.g. no backup could be made), so the caller reports it. */
+async function abortRebaseKeepingEdits(
+  context: RuntimeGitContext,
+  confirm: (request: AbortConfirmRequest) => Promise<boolean>,
+  beginAbort: () => void,
+  refreshAfterRestore: () => void
+): Promise<void> {
+  const result = await confirmAndAbortRebase({
+    inspect: () => inspectRebaseAbort(context),
+    confirm,
+    beginAbort,
+    abort: (expected, expectedDiscards) =>
+      continueRuntimeGitRebase(context, 'abort', { expected, expectedDiscards })
+  })
+  if (result === 'cancelled') {
+    return
+  }
+  if (result.outcome === 'failed') {
+    throw new Error(result.message)
+  }
+  if (result.backup) {
+    showRebaseAbortBackupToast(context, result.backup, refreshAfterRestore)
   }
 }
 
@@ -101,14 +125,14 @@ export function useSourceControlConflictAbort({
         operationStore.setState({ isAbortingOperation: true, remoteActionError: null })
       try {
         if (isRebase) {
-          await confirmAndAbortRebase({
-            inspect: () => inspectRebaseAbort(context),
-            confirm: confirmAction,
-            beginAbort,
-            abortConfirmed: (stop, discards) =>
-              continueRuntimeGitRebase(context, 'abort', stop, discards),
-            abortUnverified: () => abortRuntimeGitRebase(context)
-          })
+          await abortRebaseKeepingEdits(context, confirmAction, beginAbort, () =>
+            refreshSourceControlAfterRemoteAction({
+              worktreeId: activeWorktreeId,
+              refreshGitStatus: refreshActiveGitStatusAfterMutation,
+              refreshBranchCompare: refreshBranchCompareRef.current,
+              refreshGitHistory: refreshGitHistoryRef.current
+            })
+          )
         } else {
           beginAbort()
           await abortRuntimeGitMerge(context)

@@ -1,6 +1,6 @@
 import type {
   ContinueRebaseAction,
-  RebaseStopToken,
+  ContinueRebaseRequest,
   ContinueRebaseResult
 } from '../../../../../shared/git/status/git-status-types'
 import { translate } from '@/i18n/i18n'
@@ -12,9 +12,9 @@ import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-
 export async function continueRuntimeGitRebase(
   context: RuntimeGitContext,
   action: ContinueRebaseAction,
-  expected?: RebaseStopToken,
-  expectedDiscards?: string[]
+  request: ContinueRebaseRequest = {}
 ): Promise<ContinueRebaseResult> {
+  const { expected, expectedDiscards, backup } = request
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.continueRebase({
@@ -22,7 +22,8 @@ export async function continueRuntimeGitRebase(
       connectionId: context.connectionId,
       action,
       expected,
-      expectedDiscards
+      expectedDiscards,
+      backup
     })
   }
   try {
@@ -33,7 +34,8 @@ export async function continueRuntimeGitRebase(
         worktree: toRuntimeWorktreeSelector(context.worktreeId),
         action,
         ...(expected ? { expected } : {}),
-        ...(expectedDiscards ? { expectedDiscards } : {})
+        ...(expectedDiscards ? { expectedDiscards } : {}),
+        ...(backup ? { backup } : {})
       },
       // Each step can run hooks and rewrite many commits; a timeout leaves the outcome unknown.
       { timeoutMs: 120_000 }

@@ -29,8 +29,10 @@ function announceRebaseStep(result: ContinueRebaseResult): void {
   switch (result.outcome) {
     case 'completed':
     case 'inspected':
-    case 'aborted': // Abort outcomes never come back from Continue.
+    case 'aborted': // Abort and restore outcomes never come back from Continue.
     case 'abort_changed':
+    case 'restored':
+    case 'restored_with_conflicts':
       return
     case 'completed_autostash_conflict':
       toast.warning(
@@ -106,7 +108,7 @@ async function runContinueRequest({
 }): Promise<void> {
   const expected = operationStore.getState().rebaseStop?.token
   try {
-    const result = await continueRuntimeGitRebase(context, 'continue', expected)
+    const result = await continueRuntimeGitRebase(context, 'continue', { expected })
     recordRebaseStopReading(operationStore, result)
     announceRebaseStep(result)
   } catch (error) {

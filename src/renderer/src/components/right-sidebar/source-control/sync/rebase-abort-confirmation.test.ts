@@ -12,8 +12,11 @@ function harness(answers: boolean[]) {
   return {
     confirm: vi.fn(async (_request: AbortConfirmRequest) => queue.shift() ?? false),
     beginAbort: vi.fn(),
-    abortConfirmed: vi.fn(async (): Promise<ContinueRebaseResult> => ({ outcome: 'aborted' })),
-    abortUnverified: vi.fn(async () => {})
+    abort: vi.fn(
+      async (_stop?: RebaseStopToken, _discards?: string[]): Promise<ContinueRebaseResult> => ({
+        outcome: 'aborted'
+      })
+    )
   }
 }
 
@@ -31,8 +34,7 @@ describe('confirmAndAbortRebase', () => {
       description: 'app.txt, notes.txt',
       confirmLabel: 'Discard and abort'
     })
-    expect(h.abortConfirmed).not.toHaveBeenCalled()
-    expect(h.abortUnverified).not.toHaveBeenCalled()
+    expect(h.abort).not.toHaveBeenCalled()
   })
 
   it('aborts only the confirmed stop and set of paths', async () => {
@@ -41,12 +43,12 @@ describe('confirmAndAbortRebase', () => {
       ...h,
       inspect: async () => ({ stop: STOP, discards: ['a.txt'] })
     })
-    expect(h.abortConfirmed).toHaveBeenCalledWith(STOP, ['a.txt'])
+    expect(h.abort).toHaveBeenCalledWith(STOP, ['a.txt'])
   })
 
   it('asks again with the new set when the host saw it change before aborting', async () => {
     const h = harness([true, false])
-    h.abortConfirmed.mockResolvedValueOnce({
+    h.abort.mockResolvedValueOnce({
       outcome: 'abort_changed',
       stop: STOP,
       abortWouldDiscard: ['a.txt', 'late-edit.txt']
@@ -60,7 +62,7 @@ describe('confirmAndAbortRebase', () => {
     })
   })
 
-  it('warns that edits may be lost when the host cannot tell, never treating that as clean', async () => {
+  it('warns that edits may be lost when the host cannot tell, and sends no binding', async () => {
     const h = harness([true])
     await confirmAndAbortRebase({ ...h, inspect: async () => null })
     expect(h.confirm.mock.calls[0][0]).toMatchObject({
@@ -68,7 +70,7 @@ describe('confirmAndAbortRebase', () => {
       description: 'Uncommitted edits may be lost.',
       confirmLabel: 'Discard and abort'
     })
-    expect(h.abortUnverified).toHaveBeenCalledTimes(1)
+    expect(h.abort).toHaveBeenCalledWith()
   })
 
   it('keeps the plain confirm only when the tree is proven clean', async () => {

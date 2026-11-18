@@ -84,12 +84,11 @@ export const GIT_METHODS = [
     permission: 'workspace',
     params: GitContinueRebase,
     handler: async (params, { runtime }) =>
-      runtime.continueRuntimeGitRebase(
-        params.worktree,
-        params.action,
-        params.expected,
-        params.expectedDiscards
-      )
+      runtime.continueRuntimeGitRebase(params.worktree, params.action, {
+        expected: params.expected,
+        expectedDiscards: params.expectedDiscards,
+        backup: params.backup
+      })
   }),
   defineMethod({
     name: 'git.rebaseAutoStash',

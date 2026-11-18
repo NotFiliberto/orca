@@ -10,6 +10,7 @@ import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
 import { resolveGitDir } from '../resolve-git-dir'
 import { forgetOrcaRebaseProvenance } from './orca-rebase-provenance'
+import { backUpEditsBeforeAbort } from './rebase-abort-backup'
 import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
 
 // HEAD detection races may yield unknown for one poll; rebase directories persist more reliably than REBASE_HEAD.
@@ -65,16 +66,18 @@ export async function abortMerge(
   )
 }
 
-// Shares Continue's lock so an Abort waits for an in-flight Continue instead of racing it.
+// Mobile and older clients abort here. It shares Continue's lock, and keeps tracked edits in the
+// same backup as the desktop Abort (no backup, no abort).
 export async function abortRebase(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  forgetOrcaRebaseProvenance(worktreePath)
   await runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
-    runWithGitReadCacheInvalidation(() =>
-      gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
-    )
+    runWithGitReadCacheInvalidation(async () => {
+      await backUpEditsBeforeAbort(worktreePath, options)
+      forgetOrcaRebaseProvenance(worktreePath)
+      await gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
+    })
   )
 }
 

@@ -61,8 +61,8 @@ export function orcaRebaseMarkerIsRetired(
   branchName: string,
   remoteStatus: GitUpstreamStatus | undefined
 ): boolean {
-  // A non-empty other branch is authoritative even before upstream status catches up.
-  if (branchName !== '' && branchName !== marker.branch) {
+  // Another branch, or a detached HEAD (empty name), retires it before upstream status catches up.
+  if (branchName !== marker.branch) {
     return true
   }
   if (remoteStatus === undefined) {

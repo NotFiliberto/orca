@@ -20,9 +20,10 @@ export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'revert'
 export type RebaseFromBaseResult = { autostashConflict?: boolean; integratedUpstreamOid?: string }
 /**
  * inspect: read the current stop only; continue: run git rebase --continue at that stop; abort:
- * run git rebase --abort only if the stop and the paths it would reset are still what was confirmed.
+ * back up tracked edits, then run git rebase --abort if what the user confirmed still holds;
+ * restore: reapply an abort backup.
  */
-export type ContinueRebaseAction = 'continue' | 'inspect' | 'abort'
+export type ContinueRebaseAction = 'continue' | 'inspect' | 'abort' | 'restore'
 /** One stop of one rebase run (incarnation = onto + orig-head). Continue refuses any other. */
 export type RebaseStopToken = {
   head: string | null
@@ -47,6 +48,15 @@ export type ContinueRebaseOutcome =
   | 'aborted'
   // The stop or the set of paths Abort would reset changed since the user confirmed; nothing ran.
   | 'abort_changed'
+  | 'restored'
+  // The backup reapplied with conflicts; they show as unmerged files, and the backup is kept.
+  | 'restored_with_conflicts'
+/** expected binds continue/abort to a stop; expectedDiscards binds abort; backup names a restore. */
+export type ContinueRebaseRequest = {
+  expected?: RebaseStopToken
+  expectedDiscards?: string[]
+  backup?: string
+}
 export type ContinueRebaseResult = {
   outcome: ContinueRebaseOutcome
   // Git's own output, kept for diagnostics.
@@ -59,6 +69,8 @@ export type ContinueRebaseResult = {
   integratedUpstreamOid?: string
   // inspect/abort_changed: every tracked path Abort would reset; absent when Git could not say.
   abortWouldDiscard?: string[]
+  // aborted: the commit holding the tracked edits Abort reset; absent when nothing was dirty.
+  backup?: string
 }
 export type GitSubmoduleStatus = {
   commitChanged: boolean

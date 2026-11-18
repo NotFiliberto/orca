@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { gitPullRebaseFromBase } from './remote-rebase'
-import { continueRebase } from '../source-control/mutations/rebase-continue'
+import { continueRebase, readRebaseStopToken } from '../source-control/mutations/rebase-continue'
+import { takeOrcaRebaseProvenance } from '../source-control/mutations/orca-rebase-provenance'
 
 describe('Orca rebase provenance for hiding Pull afterwards', () => {
   const tempPaths: string[] = []
@@ -89,5 +90,22 @@ describe('Orca rebase provenance for hiding Pull afterwards', () => {
 
     const result = await gitPullRebaseFromBase(repoPath, 'origin/main')
     expect(result.integratedUpstreamOid).toBeUndefined()
+  })
+
+  it('gives no proof for a paused run this rebase did not create, even with the same endpoints', async () => {
+    const { repoPath, git } = createPublishedFeatureBehindOrigin(true)
+    git('fetch', '--quiet', 'origin')
+    // Another tool's run, already there, with exactly the onto and orig-head Orca would write.
+    const runDir = join(repoPath, '.git', 'rebase-merge')
+    mkdirSync(runDir)
+    writeFileSync(join(runDir, 'onto'), git('rev-parse', 'origin/main'))
+    writeFileSync(join(runDir, 'orig-head'), git('rev-parse', 'HEAD'))
+    writeFileSync(join(runDir, 'head-name'), 'refs/heads/feature\n')
+    writeFileSync(join(runDir, 'msgnum'), '1\n')
+    await expect(gitPullRebaseFromBase(repoPath, 'origin/main')).rejects.toThrow()
+
+    const { incarnation } = await readRebaseStopToken(repoPath, {})
+    expect(incarnation).not.toBeNull()
+    expect(takeOrcaRebaseProvenance(repoPath, 'feature', incarnation)).toBeNull()
   })
 })

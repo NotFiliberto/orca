@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type {
   ContinueRebaseAction,
-  RebaseStopToken,
+  ContinueRebaseRequest,
   ContinueRebaseResult
 } from '../../../../shared/git/status/git-status-types'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -22,9 +22,7 @@ export function registerFilesystemGitRebaseHandlers({ store }: FilesystemHandler
         worktreePath: string
         connectionId?: string
         action?: ContinueRebaseAction
-        expected?: RebaseStopToken
-        expectedDiscards?: string[]
-      }
+      } & ContinueRebaseRequest
     ): Promise<ContinueRebaseResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
@@ -35,12 +33,15 @@ export function registerFilesystemGitRebaseHandlers({ store }: FilesystemHandler
       )
       return continueRebase(
         worktreePath,
-        args.action === 'inspect' || args.action === 'abort' ? args.action : 'continue',
+        args.action === 'inspect' || args.action === 'abort' || args.action === 'restore'
+          ? args.action
+          : 'continue',
         {
           ...gitOptions,
           admissionTier: 'interactive',
           expected: args.expected,
-          expectedDiscards: args.expectedDiscards
+          expectedDiscards: args.expectedDiscards,
+          backup: args.backup
         }
       )
     }
