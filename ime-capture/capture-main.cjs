@@ -28,14 +28,14 @@ const SCENARIOS = [
   ['unikey-telex-ascii-word-enter', 'Unikey', [['type', 'xin'], ['key', 'Return']]]
 ]
 
-app.whenReady().then(async () => {
+app.whenReady().then(async () => { try {
   const results = { electron: process.versions.electron, chrome: process.versions.chrome, sync: process.env.IBUS_ENABLE_SYNC_MODE ?? null, ibus: sh('ibus', ['version']), engines: sh('ibus', ['list-engine']).split('\n').filter((l) => /hangul|pinyin|anthy|unikey|Unikey|xkb:us::eng/i.test(l)), scenarios: [] }
   const win = new BrowserWindow({ width: 800, height: 400, show: true, webPreferences: { contextIsolation: true } })
   await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(PAGE))
   await sleep(1500)
   const wid = sh('xdotool', ['search', '--sync', '--onlyvisible', '--name', 'IMECAP']).split('\n')[0]
   for (const [name, engine, steps] of SCENARIOS) {
-    await win.webContents.executeJavaScript(`window.__log=[];const t=document.getElementById('t');t.value='';t.blur();t.focus();true`)
+    await win.webContents.executeJavaScript(`(()=>{window.__log=[];const el=document.getElementById('t');el.value='';el.blur();el.focus();return true})()`)
     sh('xdotool', ['windowactivate', '--sync', wid]); sh('xdotool', ['windowfocus', '--sync', wid])
     const set = sh('ibus', ['engine', engine]); await sleep(800)
     const active = sh('ibus', ['engine'])
@@ -50,5 +50,6 @@ app.whenReady().then(async () => {
     sh('ibus', ['engine', 'xkb:us::eng']); await sleep(300)
   }
   fs.writeFileSync(out, JSON.stringify(results, null, 1))
+  } catch (e) { fs.writeFileSync(out, JSON.stringify({ error: String(e && e.stack || e) })) }
   app.quit()
 })
