@@ -349,6 +349,14 @@ async function openBrowserTabsUnderLoad({ page, app, userDataDir, windowMs, outD
     await post('Profiler.setSamplingInterval', { interval: 1000 })
     await post('Profiler.start')
   })
+  const traceStarted = await app
+    .evaluate(async ({ contentTracing }) => {
+      await contentTracing.startRecording({
+        included_categories: ['toplevel', 'ipc', 'electron', 'navigation', 'loading', 'browser']
+      })
+      return true
+    })
+    .catch(() => false)
   const streaming = streamAgentStatus({ page, userDataDir, windowMs })
   const deadline = Date.now() + windowMs
   let opened = 0
@@ -383,6 +391,14 @@ async function openBrowserTabsUnderLoad({ page, app, userDataDir, windowMs, outD
   )
   if (profile) {
     fs.writeFileSync(path.join(outDir, `${label}-${Date.now()}-browser-main.cpuprofile`), profile)
+  }
+  if (traceStarted) {
+    const tracePath = await app
+      .evaluate(({ contentTracing }) => contentTracing.stopRecording())
+      .catch(() => null)
+    if (tracePath && fs.existsSync(tracePath)) {
+      fs.copyFileSync(tracePath, path.join(outDir, `${label}-${Date.now()}-browser-chromium.json`))
+    }
   }
   frameServer.close()
   shellServer.close()
