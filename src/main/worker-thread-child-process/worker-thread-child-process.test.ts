@@ -256,14 +256,19 @@ describe('WorkerThreadChildProcessHost with a stalled worker', () => {
 })
 
 describe('WorkerThreadChildProcessHost when the worker dies', () => {
-  it('fails a launch the worker never started, so its caller is released', async () => {
+  const SPEC = { program: process.execPath, args: ['-e', ''] }
+
+  it.each([
+    ['an optional', (host: WorkerThreadChildProcessHost) => host.trySpawn(SPEC)],
+    ['a mandatory', (host: WorkerThreadChildProcessHost) => host.spawn(SPEC)]
+  ])('fails %s launch the worker never started, so its caller is released', async (_, launch) => {
     const worker = Object.assign(new EventEmitter(), {
       postMessage: () => {},
       unref: () => {},
       terminate: async () => 0
     })
     const host = new WorkerThreadChildProcessHost(() => worker)
-    const child = host.trySpawn({ program: process.execPath, args: ['-e', ''] })
+    const child = launch(host)
     if (!child) {
       throw new Error('worker launch was refused')
     }

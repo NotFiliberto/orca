@@ -143,10 +143,10 @@ export class WorkerThreadChildProcess extends EventEmitter {
     }
   }
 
-  /** The worker is gone: a running native-like child closes only once a tree kill proves it ended, so callers keep their locks while it may still run; others keep the error-only contract. */
+  /** The worker is gone: a child it never started fails like a spawn error; a running native-like child closes only once a tree kill proves it ended, so callers keep their locks while it may still run; other running children keep the error-only contract. */
   abandon(message: string): void {
     const pid = this.pid
-    if (this.nativeLike && !this.closed && pid === undefined) {
+    if (!this.closed && pid === undefined) {
       // The worker posts the pid as soon as the process exists and its messages drain before exit, so after an uncaught error
       // or exit no pid means no process (only a V8 termination between the two, e.g. worker OOM, could break this).
       this.receive({ type: 'spawn-error', id: this.id, error: { message } })
